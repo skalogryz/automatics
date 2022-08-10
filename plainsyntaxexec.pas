@@ -30,6 +30,12 @@ type
 
   { TPlainSyntaxExecEnv }
 
+  // This is a delegate for the plain syntax executor. It's primary purpose
+  // is to log the execution of commands.
+  // Implementing the delegate is optional. If not provided the executor
+  // creates it's own silent delegate that does nothing.
+  // The use of "class" instead of an "interface" is to allow adding new
+  // "default" behaviour methods
   TPlainSyntaxExecEnv = class(TObject)
   public
     procedure StartCommand(const rawCmd, finalCmd: TPlainCommand); virtual;
