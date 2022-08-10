@@ -12,9 +12,10 @@ type
   { TPlainCommand }
 
   TPlainCommand = class(TObject)
-    lines : TStringList;
-    cmd   : string;
-    args  : TStringList;
+    lines  : TStringList;
+    cmd    : string; // lower case of rawcmd
+    rawcmd : string;
+    args   : TStringList;
     constructor Create;
     destructor Destroy; override;
     procedure ParseCommand;
@@ -37,6 +38,8 @@ function IsOneLineCommand(const cmd: string): boolean;
 function ReadPlainCommandFile(const fn: string): TList;
 
 function UnixUnescape(const s : string): string;
+
+function ArgsToOneLine(s : TStrings): string;
 
 implementation
 
@@ -115,6 +118,7 @@ var
 begin
   args.Clear;
   cmd := '';
+  rawcmd := '';
   if lines.Count=0 then Exit;
 
   buf := '';
@@ -148,8 +152,9 @@ begin
     args[i]:=UnixUnescape(args[i]);
 
   if (args.Count>0) then begin
-    cmd := args[0];
+    rawcmd := args[0];
     args.Delete(0);
+    cmd := AnsiLowerCase(rawcmd);
   end;
 
 end;
@@ -210,6 +215,35 @@ begin
     st.Free;
     pp.Free;
   end;
+end;
+
+function ArgsToOneLine(s : TStrings): string;
+var
+  i  : integer;
+  j  : integer;
+  sz : integer;
+  t  : string;
+begin
+  Result := '';
+  if (s = nil) or (s.Count= 0) then
+    Exit;
+
+  sz := length(s[0]);
+  for i:=1 to s.Count-1 do
+    inc(sz, length(s[i]));
+  inc(sz, s.Count-1);
+
+  j := 1;
+  SetLength(result, sz);
+  for i:=0 to s.Count-1 do begin
+    t := s[i];
+    if length(t) = 0 then Continue;
+    Move(t[1], Result[j], length(t));
+    inc(j, length(t));
+    Result[j]:=' ';
+    inc(j);
+  end;
+
 end;
 
 end.
