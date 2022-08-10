@@ -43,7 +43,8 @@ type
 
   TPlainSyntaxExec = class(TObject)
   protected
-    CurCmd  : TCommandExecResult;
+    CurRes  : TCommandExecResult;
+    CurCmd  : TPlainCommand;
     function ExecProcess(c: TPlainCommand; res: TCommandExecResult; isTestProc: Boolean): Boolean;
     function ExecCommand(c: TPlainCommand): TCommandExecResult;
     procedure ErrorMsg(const Msg: string);
@@ -234,6 +235,9 @@ begin
   res.procInp.exec := c.args[0];
   res.procInp.timeOutMs := CurTimeOut;
   res.procInp.rundir := CurDir;
+  res.procInp.stdErrToFile:=sdPipeOnly;
+  res.procInp.stdOutToFile:=sdPipeOnly;
+
   SetLength(res.procInp.args, c.args.Count-1);
   for i:=1 to c.args.Count-1 do
     res.procInp.args[i-1]:=c.args[i];
@@ -254,7 +258,16 @@ begin
     end else if res.procRes.timedOut then begin
       ErrorMsg('process timed out  '+IntToStr(res.procREs.runTimeMs));
     end else
-      ErrorMsg('process finished with code: '+IntToStr(res.procRes.exitCode));
+      Log('process finished with code: '+IntToStr(res.procRes.exitCode));
+    Log('temp directory: '+ res.procRes.tempDir);
+    if res.procRes.outSize>0 then begin
+      Log('std out size: '+IntToStr(res.procRes.outSize));
+      Log('std out file: '+res.procRes.stdOutFn);
+    end;
+    if res.procRes.errSize>0 then begin
+      Log('std err size: '+IntToStr(res.procRes.errSize));
+      Log('std err file: '+res.procRes.stdErrFn);
+    end;
 
     Result := (res.procRes.runError <> 0)
       and not (res.procRes.timedOut);
@@ -283,7 +296,8 @@ begin
   Result := TCommandExecResult.Create;
   ran := true;
 
-  CurCmd := Result;
+  CurRes := Result;
+  CurCmd := c;
   Result.cmd := c;
   try
     if (c.cmd = 'cd') then begin
@@ -302,6 +316,7 @@ begin
       ran := false;
   finally
     CurCmd := nil;
+    CurRes := nil;
     Result.cmdran := ran;
     Result.cmd := c;
   end;
@@ -309,23 +324,23 @@ end;
 
 procedure TPlainSyntaxExec.ErrorMsg(const Msg: string);
 begin
-  if Assigned(CurCmd) then begin
-    if CurCmd.err = ''
-      then CurCmd.err := Msg
-      else CurCmd.err := CurCmd.err + #13#10 + Msg;
-  end;
-  Delegate.ErrorMsg(Msg, CurCmd.cmd);
-  // do nothing yet
+  if Assigned(CurRes) then begin
+    if CurRes.err = ''
+      then CurRes.err := Msg
+      else CurRes.err := CurRes.err + #13#10 + Msg;
+    Delegate.ErrorMsg(Msg, CurRes.cmd);
+  end else
+    Delegate.ErrorMsg(Msg, nil);
 end;
 
 procedure TPlainSyntaxExec.EchoMsg(const Msg: string);
 begin
-  Delegate.EchoMsg(Msg, CurCmd.cmd);
+  Delegate.EchoMsg(Msg, CurCmd);
 end;
 
 procedure TPlainSyntaxExec.Log(const msg: string);
 begin
-  delegate.LogMsg(msg, CurCmd.cmd);
+  delegate.LogMsg(msg, CurCmd);
 end;
 
 function TPlainSyntaxExec.CopyCmd(src: TPlainCommand): TPlainCommand;
