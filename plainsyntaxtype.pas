@@ -39,7 +39,20 @@ function ReadPlainCommandFile(const fn: string): TList;
 
 function UnixUnescape(const s : string): string;
 
+// converting TStrings to a single string
 function ArgsToOneLine(s : TStrings): string;
+
+// replacing command aliases
+procedure UpdateCommandAlias(c: TPlainCommand);
+
+const
+  CMD_CD   = 'cd';  // change directory
+  CMD_ECHO = 'echo';
+  CMD_RUN  = 'run'; // run
+
+  CMD_EXPECT = 'expect'; // all of those commands are alias to "expect"
+  CMD_ASSES  = 'assess';
+  CMD_ASSERT = 'assert';
 
 implementation
 
@@ -244,6 +257,14 @@ begin
     inc(j);
   end;
 
+end;
+
+procedure UpdateCommandAlias(c: TPlainCommand);
+begin
+  if (c.cmd = CMD_EXPECT)
+    or (c.cmd = CMD_ASSES)
+    or (c.cmd = CMD_ASSERT) then
+    c.cmd := CMD_EXPECT;
 end;
 
 end.
