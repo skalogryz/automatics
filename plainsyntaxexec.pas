@@ -35,7 +35,7 @@ type
   // Implementing the delegate is optional. If not provided the executor
   // creates it's own silent delegate that does nothing.
   // The use of "class" instead of an "interface" is to allow adding new
-  // "default" behaviour methods
+  // "default" be
   TPlainSyntaxExecEnv = class(TObject)
   public
     procedure StartCommand(const rawCmd, finalCmd: TPlainCommand); virtual;
@@ -65,6 +65,7 @@ type
     CurDir        : string;
     HasTestResult : Boolean; // set to true, if commands did include any commands
     FinalResult   : TTestResult;
+    DefaultResult : TTestResult;
     CommandLogs   : TList; // array of TCommandExecResult
     Params        : TStringList; // key/value
     Delegate      : TPlainSyntaxExecEnv;
@@ -231,9 +232,9 @@ var
   p : TRunProcess;
 begin
   res.procRun := true;
-  res.hasTestResult := isTestProc;
   if c.args.Count=0 then begin
     res.testResult := trUnableToRun;
+    res.hasTestResult := true;
     ErrorMsg(InvalidParams);
     Exit;
   end;
@@ -275,14 +276,15 @@ begin
       Log('std err file: '+res.procRes.stdErrFn);
     end;
 
-    Result := (res.procRes.runError <> 0)
+    Result := (res.procRes.runError = 0)
       and not (res.procRes.timedOut);
-    if (isTestProc) then begin
-      if Result then
-        // preliminary
-        res.testResult := trSuccess
-      else
-        res.testResult := trUnableToRun
+
+    if (isTestProc) and not Result then begin
+      // by default "run" of the test doesn't set the result of the test
+      // it's only set by the "assess" (or "expect", "assert") functions
+      // However, if "run" process FAILS to execute, the testResult is set to "fail to run"
+      res.testResult := trUnableToRun;
+      res.hasTestResult := true;
     end;
   finally
     p.Free;
@@ -318,6 +320,7 @@ begin
       LastExitCode := 0;
       if ExecProcess(c, result, true) then
         LastExitCode := result.procRes.exitCode;
+    end else if (c.cmd = 'expect') then begin
     end else
       ran := false;
   finally
@@ -358,6 +361,7 @@ begin
   c.lines.Assign(src.lines);
 
   c.ParseCommand;
+  UpdateCommandAlias(c);
   c.cmd := ReplaceParams(c.cmd, Params);
   for i:=0 to c.args.Count-1 do
     c.args[i] := ReplaceParams(c.args[i], Params);
@@ -370,6 +374,7 @@ begin
 
   CurTimeOut := -1;
   CurDir := GetCurrentDir;
+  DefaultResult := trUnableToRun;
 
   CommandLogs := TList.Create; // array of TCommandExecResult
   Params := TStringList.Create;
@@ -415,6 +420,13 @@ begin
         Break;
       end;
     end;
+
+    if not HasTestResult then begin
+      Delegate.LogMsg('the script didn''t contain any result assessment, assuming default result ('+TestResultNameStr[DefaultResult]+')',nil);
+      HasTestResult := true;
+      FinalResult := DefaultResult;
+    end;
+
   finally
     if ownDel then Delegate.Free;
   end;
