@@ -117,7 +117,7 @@ type
     const args: array of string;
     var res: TCustomFuncResult) of object;
 
-procedure RegisterCondFunc(const nm: string; fn: TCustomCondFunc; res: TCustomFuncResultType; paramsCount: integer);
+procedure RegisterCondFunc(const nm: string; fn: TCustomCondFunc; res: TCustomFuncResultType; const params: array of TCustomFuncResultType);
 procedure RegisterFuncInExprParser(x: TFPExpressionParser);
 
 implementation
@@ -273,7 +273,7 @@ begin
     try
       x.Identifiers.AddIntegerVariable('exitcode', ExitCode);
       x.Identifiers.AddIntegerVariable('errorlevel', ExitCode);
-
+      RegisterFuncInExprParser(x);
 
       x.Expression := cond;
       xr := x.Evaluate;
@@ -529,7 +529,7 @@ type
   public
     name    : string;
     customFn: TCustomCondFunc;
-    params   : Integer;
+    paramStr : string;
     resType  : TCustomFuncResultType;
     procedure ExprParsFunc(Var Result : TFPExpressionResult; Const Args : TExprParameterArray);
   end;
@@ -581,14 +581,24 @@ end;
 var
   CustomFuncReg : TStringList;
 
-procedure RegisterCondFunc(const nm: string; fn: TCustomCondFunc; res: TCustomFuncResultType; paramsCount: integer);
+const
+  ResTypeToChar : array [TCustomFuncResultType] of char = (
+    #0  // tpError
+   ,'I' // tpINt
+   ,'S' // tpStr
+   ,'B' // tpBool
+  );
+
+procedure RegisterCondFunc(const nm: string; fn: TCustomCondFunc; res: TCustomFuncResultType; const params: array of TCustomFuncResultType);
 var
   r : TCustomFuncRecord;
   i : integer;
   l : string;
+  ps : string;
 begin
   if (res = tpError) then Exit;
-  if (paramsCount < 0) then Exit;
+  for i := 0 to length(params)-1 do
+    if params[i] = tpError then Exit;
   if (@fn = nil) then Exit;
 
   l := AnsiLowerCase(nm);
@@ -599,7 +609,11 @@ begin
     CustomFuncReg.AddObject(l, r);
   end;
   r.customFn := fn;
-  r.params := paramCount;
+  ps := '';
+  for i := 0 to length(params)-1 do begin
+    ps := ps + ResTypeToChar[params[i]];
+  end;
+  r.paramStr := ps;
   r.resType := res;
 end;
 
@@ -613,19 +627,12 @@ procedure RegisterFuncInExprParser(x: TFPExpressionParser);
 var
   i  : integer;
   r  : TCustomFuncRecord;
-const
-  ResTypeToChar : array [TCustomFuncResultType] of char = (
-    #0  // tpError
-   ,'I' // tpINt
-   ,'S' // tpStr
-   ,'B' // tpBool
-  );
 begin
   for i:=0 to CustomFuncReg.Count-1 do
   begin
     r := TCustomFuncRecord(CustomFuncReg.Objects[i]);
     if r = nil then Continue;
-    x.Identifiers.AddFunction(r.name, ResTypeToChar[r.ResType], 'SSS', r.ExprParsFunc);
+    x.Identifiers.AddFunction(r.name, ResTypeToChar[r.ResType], r.paramStr, r.ExprParsFunc);
   end;
 end;
 
