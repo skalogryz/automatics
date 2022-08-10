@@ -117,7 +117,9 @@ type
     const args: array of string;
     var res: TCustomFuncResult) of object;
 
-procedure RegisterCondFunc(const nm: string; fn: TCustomCondFunc; res: TCustomFuncResultType; const params: array of TCustomFuncResultType);
+function RegisterCondFunc(const nm: string; fn: TCustomCondFunc;
+  res: TCustomFuncResultType;
+  const params: array of TCustomFuncResultType): Boolean;
 procedure RegisterFuncInExprParser(x: TFPExpressionParser);
 
 implementation
@@ -589,17 +591,20 @@ const
    ,'B' // tpBool
   );
 
-procedure RegisterCondFunc(const nm: string; fn: TCustomCondFunc; res: TCustomFuncResultType; const params: array of TCustomFuncResultType);
+function RegisterCondFunc(const nm: string; fn: TCustomCondFunc; res: TCustomFuncResultType; const params: array of TCustomFuncResultType): Boolean;
 var
   r : TCustomFuncRecord;
   i : integer;
   l : string;
   ps : string;
 begin
+  Result := false;
   if (res = tpError) then Exit;
   for i := 0 to length(params)-1 do
     if params[i] = tpError then Exit;
   if (@fn = nil) then Exit;
+
+  Result := true;
 
   l := AnsiLowerCase(nm);
   i := CustomFuncReg.IndexOf(l);
