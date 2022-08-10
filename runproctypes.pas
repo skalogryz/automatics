@@ -158,7 +158,7 @@ begin
         continue;
       fn:=d+sr.Name;
       if ((sr.Attr and faDirectory)>0)
-         {$ifdef unix} and ((FileInfo.Attr and faSymLink{%H-})=0) {$endif unix} then begin
+         {$ifdef unix} and ((sr.Attr and faSymLink{%H-})=0) {$endif unix} then begin
         if not DeleteDirectory(fn) then exit;
       end else begin
         if not DeleteFile(fn) then exit;
