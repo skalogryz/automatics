@@ -113,11 +113,10 @@ var
   j   : integer;
   buf : string;
 begin
-  if cmd <> '' then Exit;
+  args.Clear;
+  cmd := '';
   if lines.Count=0 then Exit;
-  GetFirstWord(lines[0], i, s);
-  cmd := AnsiLowerCase(s);
-  lines[0] := Copy(lines[0], i+length(s), length(lines[0]));
+
   buf := '';
   for i:= 0 to lines.Count-2 do begin
     s := lines[i];
@@ -147,6 +146,12 @@ begin
   end;
   for i:=0 to args.Count-1 do
     args[i]:=UnixUnescape(args[i]);
+
+  if (args.Count>0) then begin
+    cmd := args[0];
+    args.Delete(0);
+  end;
+
 end;
 
 { TPlainParser }
