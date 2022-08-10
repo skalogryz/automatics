@@ -5,7 +5,9 @@ interface
 {$mode delphi}{$H+}
 
 uses
-  Classes, SysUtils, runproctypes, plainsyntaxtype, runtesttypes;
+  Classes, SysUtils,
+  fpexprpars,
+  runproctypes, plainsyntaxtype, runtesttypes;
 
 type
 
@@ -51,6 +53,7 @@ type
   protected
     CurRes  : TCommandExecResult;
     CurCmd  : TPlainCommand;
+    procedure ExecExpect(c: TPlainCommand; res: TCommandExecResult);
     function ExecProcess(c: TPlainCommand; res: TCommandExecResult; isTestProc: Boolean): Boolean;
     function ExecCommand(c: TPlainCommand): TCommandExecResult;
     procedure ErrorMsg(const Msg: string);
@@ -223,6 +226,54 @@ end;
 
 { TPlainSyntaxExec }
 
+procedure TPlainSyntaxExec.ExecExpect(c: TPlainCommand; res: TCommandExecResult);
+var
+  cond : string;
+  x    : TFPExpressionParser;
+  xr   : TFPExpressionResult;
+  rb   : boolean;
+const
+  BoolRes : array [boolean] of TTestResult = (trFail, trSuccess);
+begin
+  res.hasTestResult := true;
+  cond := Trim(ArgsToOneLine(c.args));
+
+  if cond ='' then begin
+    res.testResult := trUnableToRun;
+    ErrorMsg(InvalidParams);
+    Exit;
+  end;
+
+  x := TFPExpressionParser.Create(nil);
+  try
+    try
+      x.Identifiers.AddIntegerVariable('exitcode', ExitCode);
+      x.Identifiers.AddIntegerVariable('errorlevel', ExitCode);
+
+      x.Expression := cond;
+      xr := x.Evaluate;
+      case xr.ResultType of
+        rtBoolean : rb := xr.ResBoolean;
+        rtInteger : rb := xr.ResInteger <> 0;
+        rtString  : rb := xr.ResString <> '';
+        rtFloat   : rb := xr.ResCurrency <> 0;
+      else
+        res.testResult := trUnableToRun;
+        ErrorMsg('invalid condition expression '+ cond);
+        Exit;
+      end;
+      res.testResult := BoolRes[rb];
+    finally
+      x.Free;
+    end;
+  except
+    on e: exception do begin
+      res.testResult := trUnableToRun;
+      ErrorMsg('error while evaluating '+ e.Message);
+    end;
+  end;
+end;
+
 // returns true, if the process WAS able to run
 // and did finish in time.
 // False: otherwise
@@ -308,19 +359,20 @@ begin
   CurCmd := c;
   Result.cmd := c;
   try
-    if (c.cmd = 'cd') then begin
+    if (c.cmd = CMD_CD) then begin
       ran := c.args.Count>1;
       if not ran then begin
         ErrorMsg(InvalidParams);
       end;
       CurDir := c.args[0]
-    end else if (c.cmd = 'echo') then begin
+    end else if (c.cmd = CMD_ECHO) then begin
       EchoMsg(ArgsToOneLine(c.args));
-    end else if (c.cmd = 'run') then begin
+    end else if (c.cmd = CMD_RUN) then begin
       LastExitCode := 0;
       if ExecProcess(c, result, true) then
         LastExitCode := result.procRes.exitCode;
-    end else if (c.cmd = 'expect') then begin
+    end else if (c.cmd = CMD_EXPECT) then begin
+      ExecExpect(c, result);
     end else
       ran := false;
   finally
@@ -426,6 +478,7 @@ begin
       HasTestResult := true;
       FinalResult := DefaultResult;
     end;
+    Delegate.LogMsg('the script result ('+TestResultNameStr[FinalResult]+')',nil);
 
   finally
     if ownDel then Delegate.Free;

@@ -5,7 +5,7 @@ interface
 {$mode delphi}{$H+}
 
 type
-  TTestResult = (trSuccess, trFail, trUnableToRun);
+  TTestResult = (trFail, trSuccess, trUnableToRun);
 
 const
   TestResultNameStr : array [TTestResult] of string = ('Success', 'Fail', 'Unable to run');
