@@ -96,6 +96,30 @@ type
     procedure LogMsg(const msg: string; cmd: TPlainCommand); override;
   end;
 
+
+type
+  TCustomFuncResultType = (
+    tpError,
+    tpInt,
+    tpString,
+    tpBool
+  );
+
+  TCustomFuncResult = record
+    resType : TCustomFuncResultType;
+    int  : Integer;
+    str  : String;
+    bool : Boolean;
+  end;
+
+  TCustomCondFunc = procedure(
+    const fnname: string;
+    const args: array of string;
+    var res: TCustomFuncResult) of object;
+
+procedure RegisterCondFunc(const nm: string; fn: TCustomCondFunc; res: TCustomFuncResultType; paramsCount: integer);
+procedure RegisterFuncInExprParser(x: TFPExpressionParser);
+
 implementation
 
 const
@@ -249,6 +273,7 @@ begin
     try
       x.Identifiers.AddIntegerVariable('exitcode', ExitCode);
       x.Identifiers.AddIntegerVariable('errorlevel', ExitCode);
+
 
       x.Expression := cond;
       xr := x.Evaluate;
@@ -494,5 +519,122 @@ begin
     TObject(CommandLogs[i]).Free;
   CommandLogs.Clear;
 end;
+
+
+type
+
+  { TCustomFuncRecord }
+
+  TCustomFuncRecord = class(TObject)
+  public
+    name    : string;
+    customFn: TCustomCondFunc;
+    params   : Integer;
+    resType  : TCustomFuncResultType;
+    procedure ExprParsFunc(Var Result : TFPExpressionResult; Const Args : TExprParameterArray);
+  end;
+
+{ TCustomFuncRecord }
+
+procedure TCustomFuncRecord.ExprParsFunc(var Result: TFPExpressionResult;
+  const Args: TExprParameterArray);
+var
+  astr : array of string;
+  i    : integer;
+  res  : TCustomFuncResult;
+const
+  BoolToStr : array [boolean] of string = ('0','1');
+begin
+  SetLength(astr, length(Args));
+  for i:=0 to length(args)-1 do begin
+    case args[i].ResultType of
+      rtBoolean  : astr[i] := BoolToStr[args[i].ResBoolean];
+      rtInteger  : astr[i] := IntTostr(args[i].ResInteger);
+      rtFloat    : astr[i] := FloatTostr(args[i].ResFloat);
+      rtCurrency : astr[i] := FloatTostr(args[i].ResCurrency);
+      rtDateTime : astr[i] := FormatDateTime('yyyy-mm-dd hh:nn:ss:zzz', args[i].ResDateTime);
+    else
+      astr[i]:=args[i].ResString;
+    end;
+  end;
+
+  res.resType := resType;
+  res.int := 0;
+  res.bool := false;
+  res.str := '';
+  try
+    customFn(name, astr, res);
+  except
+  end;
+  if resType = tpInt then begin
+    Result.ResultType := rtInteger;
+    Result.ResInteger := res.int;
+  end else if resType = tpString then begin
+    Result.ResultType := rtString;
+    Result.ResString := res.str;
+  end else begin
+    Result.ResultType := rtBoolean;
+    Result.ResBoolean := res.bool;
+  end;
+end;
+
+var
+  CustomFuncReg : TStringList;
+
+procedure RegisterCondFunc(const nm: string; fn: TCustomCondFunc; res: TCustomFuncResultType; paramsCount: integer);
+var
+  r : TCustomFuncRecord;
+  i : integer;
+  l : string;
+begin
+  if (res = tpError) then Exit;
+  if (paramsCount < 0) then Exit;
+  if (@fn = nil) then Exit;
+
+  l := AnsiLowerCase(nm);
+  i := CustomFuncReg.IndexOf(l);
+  if i<0 then begin
+    r := TCustomFuncRecord.Create;
+    r.Name := l;
+    CustomFuncReg.AddObject(l, r);
+  end;
+  r.customFn := fn;
+  r.params := paramCount;
+  r.resType := res;
+end;
+
+procedure FreeCustomFuncReg;
+begin
+  CustomFuncReg.Free;
+end;
+
+
+procedure RegisterFuncInExprParser(x: TFPExpressionParser);
+var
+  i  : integer;
+  r  : TCustomFuncRecord;
+const
+  ResTypeToChar : array [TCustomFuncResultType] of char = (
+    #0  // tpError
+   ,'I' // tpINt
+   ,'S' // tpStr
+   ,'B' // tpBool
+  );
+begin
+  for i:=0 to CustomFuncReg.Count-1 do
+  begin
+    r := TCustomFuncRecord(CustomFuncReg.Objects[i]);
+    if r = nil then Continue;
+    x.Identifiers.AddFunction(r.name, ResTypeToChar[r.ResType], 'SSS', r.ExprParsFunc);
+  end;
+end;
+
+initialization
+  CustomFuncReg := TStringList.Create;
+  CustomFuncReg.OwnsObjects := true;
+  CustomFuncReg.CaseSensitive := false;
+
+finalization
+  FreeCustomFuncReg;
 
 end.
