@@ -376,6 +376,7 @@ destructor TTestPerformer.Destroy;
 var
   i : integer;
 begin
+  Abort;
   fileExt.Free;
   if OwnResult then
     for i := 0 to filesToTest.Count-1 do begin
@@ -418,12 +419,19 @@ end;
 
 function TTestPerformer.IsDone: Boolean;
 begin
-  Result := (ctrlThread.Finished) and dirDone;
+  Result := Assigned(ctrlThread)
+       and (ctrlThread.Finished)
+       and dirDone;
 end;
 
 procedure TTestPerformer.Abort;
 begin
-  cancel := true;
+  if Assigned(ctrlThread) then begin
+    cancel := true;
+    ctrlThread.WaitFor;
+    ctrlThread.Free;
+    ctrlThread := nil;
+  end;
 end;
 
 function TTestPerformer.GetResults(dst: TStrings): Boolean;
