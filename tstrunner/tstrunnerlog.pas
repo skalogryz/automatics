@@ -6,7 +6,7 @@ interface
 uses SysUtils, Classes, syncobjs;
 
 
-procedure SetLog(const AEnableLog: Boolean);
+procedure SetLogFile(const fn: string);
 
 procedure Log(const s: string); overload;
 procedure Log(const fmt: string; const args : array of const); overload;
@@ -24,11 +24,6 @@ var
   target: Text;
   closeTarget: Boolean = false;
   lock : TCriticalSection;
-
-procedure SetLog(const AEnableLog: Boolean);
-begin
-  EnableLog := AEnableLog;
-end;
 
 procedure DoLog(const pfx, s: string);
 begin
@@ -78,7 +73,7 @@ end;
 
 initialization
   lock := TCriticalSection.Create;
-  target := StdOut;
+  target := StdErr;
 
 finalization
   if closeTarget then

@@ -10,6 +10,7 @@ uses
 
 var
   ShowHelp : Boolean = false;
+  SkipSubject : Boolean = false;
   inp      : TTestInput; // subject application
   Target   : TStringList;
   res      : TStringList;
@@ -21,10 +22,13 @@ begin
     writeln('Subject needs to be specified');
   writeln('tstrunner [%options%] [%dir or file%]');
   writeln;
-  writeln(' -h - show help');
   writeln(' -s %filename% - the test subject application');
-  writeln(' -v - enable verbose output');
+  writeln(' -s- - no sujbect application to be used');
   writeln(' -o %filename% - result name');
+  writeln(' -l %filename% - log file name');
+  writeln(' -l- - disable logging');
+  writeln(' -v - enable verbose output');
+  writeln(' -h - show help');
 end;
 
 procedure ResultsToCSV(var dst: Text; res: TStringList);
@@ -76,8 +80,16 @@ begin
     if Pos('-',l)=1 then begin
       if l = '-h' then begin
         ShowHelp := true;
+      end else if l = '-l-' then begin
+        EnableLog := false;
+      end else if l = '-l' then begin
+        inc(i);
+        if i<=ParamCount then
+          SetLogFile(ParamStr(i));
       end else if l = '-v' then begin
         EnableVerbose := true;
+      end else if l = '-s-' then begin
+        SkipSubject := true;
       end else if l = '-s' then begin
         inc(i);
         if i<=ParamCount then
@@ -95,7 +107,7 @@ begin
 
   if ShowHelp and (inp.Subject = '') then
     inp.Subject := '*' // something dummy not to be printed
-  else if inp.Subject ='' then
+  else if (inp.Subject ='') and not SkipSubject then
     ShowHelp := true
   else begin;
     if Target.Count =0 then
