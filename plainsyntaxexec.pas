@@ -460,8 +460,12 @@ begin
 end;
 
 destructor TPlainSyntaxExec.Destroy;
+var
+  i : integer;
 begin
   Params.Free;
+  for i:=0 to CommandLogs.Count-1 do
+    TObject(CommandLogs[i]).Free;
   CommandLogs.Free;
   inherited Destroy;
 end;
