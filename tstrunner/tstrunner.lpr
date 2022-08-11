@@ -121,8 +121,11 @@ begin
 
       Log('starting. Subject: "%s"', [inp.subject]);
       PerformTests(Target, inp, res);
-      Log('producing results');
-      ResultsToCSV(res);
+      if (res.Count>0) then begin
+        Log('producing results');
+        ResultsToCSV(res);
+      end else
+        Log('no tests found');
       Log('done');
 
     finally
