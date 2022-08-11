@@ -6,6 +6,8 @@ interface
 
 uses
   Classes, SysUtils, ExtraFileUtils
+  ,tstrunnerlog
+  ,runtesttypes
   ,plainsyntaxtype
   ,plainsyntaxexeccond
   ,plainsyntaxexec;
@@ -40,7 +42,6 @@ type
     filesIdx    : integer;
     dirToTest   : TStringList; // of
     dirDone     : Boolean;
-    pendingProc : TList;
     ctrlThread  : TThread;
     cancel      : Boolean;
     fileExt     : TStringList;
@@ -85,6 +86,7 @@ type
 procedure PerformTests(Target: TStringList; const inp : TTestInput);
 var
   t : TTestPerformer;
+  i : integer;
 begin
   t := TTestPerformer.Create;
   try
@@ -93,7 +95,6 @@ begin
     while not t.IsDone do begin
       Sleep(15);
     end;
-    write(t.filesToTest.Text);
   finally
     t.Free;
   end;
@@ -133,8 +134,10 @@ var
 begin
   cmds:=nil;
   try
+    Log('executing: %s', [fn]);
     cmds := ReadPlainCommandFile(fn);
     exec.RunCommands(cmds);
+    Log('finished: %s (%s)', [ExtractFileName(fn), TestResultNameStr[exec.FinalResult]]);
   finally
     done := true;
     if (cmds<>nil) then begin
@@ -244,8 +247,10 @@ begin
   if (l = nil) or (l.Count = 0) then Exit;
   for i:=0 to l.Count-1 do begin
     x := AnsiLowerCase( ExtractFileExt(l[i]));
-    if (fileExt.IndexOf(x)>=0) then
+    if (fileExt.IndexOf(x)>=0) then begin
+      Log('scheduling the file: %s', [l[i]]);
       filesToTest.Add(l[i]);
+    end;
   end;
 end;
 
@@ -277,7 +282,6 @@ begin
       if info <> nil then continue;
 
       info := TFileRunInfo.Create;
-      writeln(stderr,'starting: ', filesToTest[i]);
       info.Start(filesToTest[i], subject);
       filesToTest.Objects[i] := info;
       inc(used);
@@ -294,6 +298,7 @@ var
 begin
   for i:=0 to dirToTest.Count-1 do begin
     srch := TAsyncFileSearch.Create;
+    Log('searching directory: %s', [dirToTest[i]]);
     srch.StartSearch(dirToTest[i]);
     dirToTest.Objects[i] := srch;
   end;
@@ -304,7 +309,6 @@ begin
   inherited Create;
   filesToTest := TStringList.Create;
   dirToTest   := TStringList.Create;
-  pendingProc := TList.Create;
   fileExt := TStringList.Create;
   fileExt.Add('.tst');
   fileExt.Add('.test');
@@ -314,7 +318,6 @@ end;
 destructor TTestPerformer.Destroy;
 begin
   fileExt.Free;
-  pendingProc.Free;
   filesToTest.Free;
   dirToTest.Free;
   inherited Destroy;
@@ -351,9 +354,7 @@ end;
 
 function TTestPerformer.IsDone: Boolean;
 begin
-  Result := {(filesIdx >= filesToTest.Count)
-    and (pendingProc.Count = 0);
-    and} (dirdone);
+  Result := (ctrlThread.Finished) and (dirdone);
 end;
 
 procedure TTestPerformer.Abort;

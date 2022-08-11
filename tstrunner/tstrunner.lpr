@@ -6,7 +6,7 @@ uses
   {$IFDEF UNIX}
   cthreads,
   {$ENDIF}
-  Classes, SysUtils, tstrunnercore;
+  Classes, SysUtils, tstrunnercore, tstrunnerlog;
 
 var
   ShowHelp : Boolean = false;
@@ -71,14 +71,16 @@ begin
         Exit;
       end;
 
+      Log('starting. Subject: "%s"', [inp.subject]);
       PerformTests(Target, inp);
+      Log('done');
 
     finally
       Target.Free;
     end;
   except
     on e: exception do begin
-      writeln(stderr, e.Message);
+      Error(e.Message);
       ExitCode := 1;
     end;
   end;
