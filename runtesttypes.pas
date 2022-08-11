@@ -8,7 +8,7 @@ type
   TTestResult = (trFail, trSuccess, trUnableToRun);
 
 const
-  TestResultNameStr : array [TTestResult] of string = ('Success', 'Fail', 'Unable to run');
+  TestResultNameStr : array [TTestResult] of string = ('Fail', 'Success', 'Unable to run');
 
 implementation
 
