@@ -6,13 +6,14 @@ uses
   {$IFDEF UNIX}
   cthreads,
   {$ENDIF}
-  Classes, SysUtils, tstrunnercore, tstrunnerlog;
+  Classes, SysUtils, tstrunnercore, tstrunnerlog, runtesttypes;
 
 var
   ShowHelp : Boolean = false;
   inp      : TTestInput; // subject application
   Target   : TStringList;
-  res : TStringList;
+  res      : TStringList;
+  outFn    : string;
 
 procedure PrintHelp;
 begin
@@ -23,6 +24,43 @@ begin
   writeln(' -h - show help');
   writeln(' -s %filename% - the test subject application');
   writeln(' -v - enable verbose output');
+  writeln(' -o %filename% - result name');
+end;
+
+procedure ResultsToCSV(var dst: Text; res: TStringList);
+var
+  i : integer;
+  info : TFileRunInfo;
+begin
+  res.Sort;
+  write(dst, FormatDateTime('yyyy-mm-dd hh:nn:ss:zzz', now));
+  writeln(dst);
+  write(dst, inp.subject);
+  writeln(dst);
+  for i := 0 to res.Count-1 do begin
+    info := TFileRunInfo(res.Objects[i]);
+    write(dst,  ExtractFileName(res[i]) );
+    write(dst, ',', res[i]);
+    write(dst, ',', res[i]);
+    write(dst, ',', TestResultNameStr[info.GetTestResult()]);
+    writeln(dst);
+  end;
+end;
+
+procedure ResultsToCSV(res: TStringList);
+var
+  f : Text;
+begin
+  if outFn = ''
+    then ResultsToCsv(StdOut, res)
+  else begin
+    AssignFile(f, outFn); Rewrite(f);
+    try
+      ResultsToCsv(f, res);
+    finally
+      CloseFile(f);
+    end;
+  end;
 end;
 
 procedure ParseParams;
@@ -36,15 +74,19 @@ begin
     p := ParamStr(i);
     l := AnsiLowerCase(p);
     if Pos('-',l)=1 then begin
-    if l = '-h' then begin
-      ShowHelp := true;
-    end else if l = '-v' then begin
-      EnableVerbose := true;
-    end else if l = '-s' then begin
-      inc(i);
-      if i<=ParamCOunt then
-        inp.subject := ParamStr(i);
-    end;
+      if l = '-h' then begin
+        ShowHelp := true;
+      end else if l = '-v' then begin
+        EnableVerbose := true;
+      end else if l = '-s' then begin
+        inc(i);
+        if i<=ParamCount then
+          inp.subject := ParamStr(i);
+      end else if l = '-o' then begin
+        inc(i);
+        if i<=ParamCount then
+          outFn:= ParamStr(i);
+      end;
     end else
       Target.Add(p);
 
@@ -80,6 +122,7 @@ begin
       Log('starting. Subject: "%s"', [inp.subject]);
       PerformTests(Target, inp, res);
       Log('producing results');
+      ResultsToCSV(res);
       Log('done');
 
     finally

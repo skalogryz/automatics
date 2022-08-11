@@ -31,6 +31,7 @@ type
     done     : Boolean;
     destructor Destroy; override;
     function IsRunning: Boolean;
+    function GetTestResult: TTestResult;
     procedure Start(const scriptFn, subjectFile: string);
   end;
 
@@ -212,6 +213,11 @@ begin
   Result := Assigned(execThr)
        and (not execThr.Finished)
        and not done;
+end;
+
+function TFileRunInfo.GetTestResult: TTestResult;
+begin
+  Result :=exec.FinalResult;
 end;
 
 procedure TFileRunInfo.Start(const scriptFn, subjectFile: string);
