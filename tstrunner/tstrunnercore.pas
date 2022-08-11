@@ -434,7 +434,7 @@ begin
   if dst = nil then Exit;
   for i:=0 to filesToTest.Count-1 do begin
     if Assigned(filesToTest.Objects[i]) then
-      dst.AddObject(dst[i], filesToTest.Objects[i]);
+      dst.AddObject(filesToTest[i], filesToTest.Objects[i]);
   end;
 end;
 
