@@ -283,7 +283,10 @@ begin
         rtBoolean : rb := xr.ResBoolean;
         rtInteger : rb := xr.ResInteger <> 0;
         rtString  : rb := xr.ResString <> '';
-        rtFloat   : rb := xr.ResCurrency <> 0;
+        rtFloat   : rb := xr.ResFloat <> 0;
+        {$if FPC_FULlVERSION >= 030200}
+        rtCurrency : rb := xr.ResCurrency <> 0;
+        {$endif}
       else
         res.testResult := trUnableToRun;
         ErrorMsg('invalid condition expression '+ cond);
@@ -557,7 +560,9 @@ begin
       rtBoolean  : astr[i] := BoolToStr[args[i].ResBoolean];
       rtInteger  : astr[i] := IntTostr(args[i].ResInteger);
       rtFloat    : astr[i] := FloatTostr(args[i].ResFloat);
+      {$if FPC_FULlVERSION >= 030200}
       rtCurrency : astr[i] := FloatTostr(args[i].ResCurrency);
+      {$endif}
       rtDateTime : astr[i] := FormatDateTime('yyyy-mm-dd hh:nn:ss:zzz', args[i].ResDateTime);
     else
       astr[i]:=args[i].ResString;
