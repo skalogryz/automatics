@@ -45,7 +45,6 @@ begin
     info := TFileRunInfo(res.Objects[i]);
     write(dst,  ExtractFileName(res[i]) );
     write(dst, ',', res[i]);
-    write(dst, ',', res[i]);
     write(dst, ',', TestResultNameStr[info.GetTestResult()]);
     writeln(dst);
   end;
