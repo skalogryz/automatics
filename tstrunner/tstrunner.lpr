@@ -41,7 +41,7 @@ begin
   writeln(dst);
   write(dst, inp.subject);
   writeln(dst);
-  writeln('test,filename,result');
+  writeln(dst, 'test,filename,result');
   for i := 0 to res.Count-1 do begin
     info := TFileRunInfo(res.Objects[i]);
     write(dst,  ExtractFileName(res[i]) );
