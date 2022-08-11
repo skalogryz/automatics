@@ -5,23 +5,31 @@ unit ExtraFileUtils;
 interface
 
 uses
-  Classes, SysUtils;
+  Classes, SysUtils, syncobjs;
 
 type
 
-  { TFileSearch }
+  { TAsyncFileSearch }
 
-  TFileSearch = class(TObject)
+  TAsyncFileSearch = class(TObject)
   private
-    fsearch : TThread;
+    fsearch    : TThread;
+    flock      : TCriticalSection;
+    filesFound : TStringList;
+    freported  : Integer;
   protected
     procedure ThreadProc;
+    procedure AddFile(const fn: string);
   public
-    BaseDir : String;
-    filesFound : TStringList;
+    BaseDir    : String;
+    fcancel    : Boolean;
+    constructor Create;
+    destructor Destroy; override;
     procedure StartSearch(const ABaseDir: string);
     procedure StopSearch;
     function IsSearching: BOolean;
+    function GatherNewFound(dst: TStrings): Integer;
+    function GatherAllFound(dst: TStrings): Integer;
   end;
 
 function DeleteDirectory(const dir: string): Boolean;
@@ -36,7 +44,7 @@ type
   private
 
   protected
-    srch: TFileSearch;
+    srch: TAsyncFileSearch;
     procedure Execute; override;
   end;
 
@@ -50,36 +58,128 @@ begin
   end;
 end;
 
-{ TFileSearch }
+{ TAsyncFileSearch }
 
-procedure TFileSearch.ThreadProc;
+procedure TAsyncFileSearch.ThreadProc;
 var
   dirs  : TStringList;
+  sr    : TSearchRec;
+  fn    : String;
+  d     : string;
+  based : string;
 begin
   dirs  := TStringList.Create;
   try
     dirs.Add(BaseDir);
     while dirs.Count>0 do begin
+      if fcancel then Break;
+      based := dirs[0];
+      dirs.Delete(0);
 
+      d := IncludeTrailingPathDelimiter(based);
+      if FindFirst(d+AllFilesMask,faAnyFile, sr)<> 0 then
+        continue;
+      try
+        repeat
+          // check if special file
+          if (sr.Name='.') or (sr.Name='..') or (sr.Name='') then
+            continue;
+          fn:=d+sr.Name;
+          if ((sr.Attr and faDirectory)>0) then
+            dirs.add(fn)
+          else
+            AddFile(fn);
+          if fcancel then Break;
+        until FindNext(sr)<>0;
+      finally
+        FindClose(sr);
+      end;
     end;
   finally
     dirs.Free;
   end;
 end;
 
-procedure TFileSearch.StartSearch(const ABaseDir: string);
+procedure TAsyncFileSearch.AddFile(const fn: string);
 begin
-
+  flock.Enter;
+  try
+    filesFound.Add(fn);
+  finally
+    flock.Leave;
+  end;
 end;
 
-procedure TFileSearch.StopSearch;
+constructor TAsyncFileSearch.Create;
 begin
-
+  inherited Create;
+  flock := TCriticalSection.Create;
+  filesFound := TStringList.Create;
 end;
 
-function TFileSearch.IsSearching: BOolean;
+destructor TAsyncFileSearch.Destroy;
+begin
+  StopSearch;
+  filesFound.Free;
+  flock.Free;
+  inherited Destroy;
+end;
+
+procedure TAsyncFileSearch.StartSearch(const ABaseDir: string);
+begin
+  StopSearch;
+  fcancel := false;
+
+  filesFound.Clear;
+  freported := 0;
+
+  BaseDir := ABaseDir;
+  fSearch := TSearchThread.Create(true);
+  TSearchThread(fSearch).srch := Self;
+  fSearch.Start;
+end;
+
+procedure TAsyncFileSearch.StopSearch;
+begin
+  if not Assigned(fsearch) then Exit;
+  fcancel := true;
+  fsearch.WaitFor;
+  fsearch.Free;
+  fsearch := nil;
+end;
+
+function TAsyncFileSearch.IsSearching: BOolean;
 begin
   Result := Assigned(fsearch) and (not fsearch.Finished);
+end;
+
+function TAsyncFileSearch.GatherNewFound(dst: TStrings): Integer;
+var
+  i : integer;
+begin
+  flock.Enter;
+  try
+    Result := filesFound.count - freported;
+    if Assigned(dst) then begin
+      for i :=freported to filesFound.count-1 do
+        dst.Add(filesFound[i]);
+      freported := filesFound.count;
+    end;
+  finally
+    flock.Leave;
+  end;
+end;
+
+function TAsyncFileSearch.GatherAllFound(dst: TStrings): Integer;
+begin
+  flock.Enter;
+  try
+    Result := filesFound.count;
+    if Assigned(dst) then
+      dst.AddStrings(filesFound);
+  finally
+    flock.Leave;
+  end;
 end;
 
 function DeleteDirectory(const dir: string): Boolean;

@@ -5,7 +5,7 @@ unit runproctypes;
 interface
 
 uses
-  Classes, SysUtils, Pipes, Process;
+  Classes, SysUtils, Pipes, Process, ExtraFileUtils;
 
 type
   TStdHandler = (sdIgnore, sdPipeOnly, sdFile);
@@ -97,8 +97,6 @@ procedure ProcDeleteTempFolder(p: TRunProcess);
 
 function GetSysError: Integer;
 
-function DeleteDirectory(const dir: string): Boolean;
-
 implementation
 
 type
@@ -134,40 +132,6 @@ begin
   while p.isRunning do begin
     Sleep(15);
   end;
-end;
-
-function DeleteDirectory(const dir: string): Boolean;
-const
-  //Don't follow symlinks on *nix, just delete them
-  DeleteMask = faAnyFile {$ifdef unix} or faSymLink{%H-} {$endif unix};
-var
-  sr: TSearchRec;
-  fn: String;
-  d : string;
-  based : string;
-begin
-  Result:=false;
-  based := ExpandFileName(dir);
-  d := IncludeTrailingPathDelimiter(based);
-  if FindFirst(d+AllFilesMask,DeleteMask, sr)<> 0 then Exit;
-
-  try
-    repeat
-      // check if special file
-      if (sr.Name='.') or (sr.Name='..') or (sr.Name='') then
-        continue;
-      fn:=d+sr.Name;
-      if ((sr.Attr and faDirectory)>0)
-         {$ifdef unix} and ((sr.Attr and faSymLink{%H-})=0) {$endif unix} then begin
-        if not DeleteDirectory(fn) then exit;
-      end else begin
-        if not DeleteFile(fn) then exit;
-      end;
-    until FindNext(sr)<>0;
-  finally
-    FindClose(sr);
-  end;
-  Result := RemoveDir(based);
 end;
 
 procedure ProcDeleteTempFolder(p: TRunProcess);
