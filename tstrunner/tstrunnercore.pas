@@ -39,7 +39,6 @@ type
   TTestPerformer = class(TObject)
   private
     filesToTest : TStringList; // of TFileRunInfo
-    filesIdx    : integer;
     dirToTest   : TStringList; // of
     dirDone     : Boolean;
     ctrlThread  : TThread;
@@ -55,15 +54,17 @@ type
     procedure VerifyFilesFromDirSearch(l: TStringList);
     function CheckTestFiles: Integer;
   public
+    OwnResult : Boolean;
     constructor Create;
     destructor Destroy; override;
     procedure Init(Target: TStringList; const inp : TTestInput);
     procedure StartTests;
     function IsDone: Boolean;
     procedure Abort;
+    function GetResults(dst: TStrings): Boolean;
   end;
 
-procedure PerformTests(Target: TStringList; const inp : TTestInput);
+procedure PerformTests(Target: TStringList; const inp : TTestInput; result: TStrings);
 procedure InitTestInput(out inp: TTestInput);
 
 const
@@ -83,10 +84,9 @@ type
     constructor Create(performer: TTestPerformer);
   end;
 
-procedure PerformTests(Target: TStringList; const inp : TTestInput);
+procedure PerformTests(Target: TStringList; const inp : TTestInput; result: TStrings);
 var
   t : TTestPerformer;
-  i : integer;
 begin
   t := TTestPerformer.Create;
   try
@@ -95,6 +95,9 @@ begin
     while not t.IsDone do begin
       Sleep(15);
     end;
+    if Assigned(result) then
+      t.OwnResult := false;
+    t.GetResults(result);
   finally
     t.Free;
   end;
@@ -144,7 +147,8 @@ type
 
 constructor TFileInfoDelegate.Create(Ainfo: TfileRunInfo);
 begin
-
+  inherited Create;
+  finfo := AInfo;
 end;
 
 procedure TFileInfoDelegate.StartCommand(const rawCmd, finalCmd: TPlainCommand);
@@ -198,6 +202,8 @@ end;
 destructor TFileRunInfo.Destroy;
 begin
   delegate.Free;
+  exec.Free;
+  execThr.Free;
   inherited Destroy;
 end;
 
@@ -357,6 +363,7 @@ end;
 constructor TTestPerformer.Create;
 begin
   inherited Create;
+  OwnResult := true;
   filesToTest := TStringList.Create;
   dirToTest   := TStringList.Create;
   fileExt := TStringList.Create;
@@ -366,8 +373,15 @@ begin
 end;
 
 destructor TTestPerformer.Destroy;
+var
+  i : integer;
 begin
   fileExt.Free;
+  if OwnResult then
+    for i := 0 to filesToTest.Count-1 do begin
+      filesToTest.Objects[i].Free;
+      filesToTest.Objects[i] := nil;
+    end;
   filesToTest.Free;
   dirToTest.Free;
   inherited Destroy;
@@ -404,12 +418,24 @@ end;
 
 function TTestPerformer.IsDone: Boolean;
 begin
-  Result := (ctrlThread.Finished) and (dirdone);
+  Result := (ctrlThread.Finished) and dirDone;
 end;
 
 procedure TTestPerformer.Abort;
 begin
+  cancel := true;
+end;
 
+function TTestPerformer.GetResults(dst: TStrings): Boolean;
+var
+  i : integer;
+begin
+  Result := IsDone;
+  if dst = nil then Exit;
+  for i:=0 to filesToTest.Count-1 do begin
+    if Assigned(filesToTest.Objects[i]) then
+      dst.AddObject(dst[i], filesToTest.Objects[i]);
+  end;
 end;
 
 procedure InitTestInput(out inp: TTestInput);

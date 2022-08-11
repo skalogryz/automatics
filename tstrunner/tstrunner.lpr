@@ -12,6 +12,7 @@ var
   ShowHelp : Boolean = false;
   inp      : TTestInput; // subject application
   Target   : TStringList;
+  res : TStringList;
 
 procedure PrintHelp;
 begin
@@ -63,6 +64,8 @@ end;
 begin
   try
     Target := TStringList.Create;
+    res := TStringList.Create;
+    res.OwnsObjects := true;
     try
       InitTestInput(inp);
       Target.CaseSensitive := {$ifdef linux}true{$else}false{$endif};
@@ -75,11 +78,13 @@ begin
       end;
 
       Log('starting. Subject: "%s"', [inp.subject]);
-      PerformTests(Target, inp);
+      PerformTests(Target, inp, res);
+      Log('producing results');
       Log('done');
 
     finally
       Target.Free;
+      res.Free;
     end;
   except
     on e: exception do begin
