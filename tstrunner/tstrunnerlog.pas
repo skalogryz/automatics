@@ -12,7 +12,7 @@ procedure Log(const s: string); overload;
 procedure Log(const fmt: string; const args : array of const); overload;
 procedure Warn(const s: string);
 procedure Error(const s: string);
-procedure Vebose(const s: string);
+procedure Verbose(const s: string);
 
 var
   EnableLog: Boolean = true;
@@ -71,7 +71,7 @@ begin
   DoLog('ERR: ', s);
 end;
 
-procedure Vebose(const s: string);
+procedure Verbose(const s: string);
 begin
   if EnableVerbose then DoLog('', s);
 end;

@@ -21,6 +21,7 @@ begin
   writeln;
   writeln(' -h - show help');
   writeln(' -s %filename% - the test subject application');
+  writeln(' -v - enable verbose output');
 end;
 
 procedure ParseParams;
@@ -36,6 +37,8 @@ begin
     if Pos('-',l)=1 then begin
     if l = '-h' then begin
       ShowHelp := true;
+    end else if l = '-v' then begin
+      EnableVerbose := true;
     end else if l = '-s' then begin
       inc(i);
       if i<=ParamCOunt then

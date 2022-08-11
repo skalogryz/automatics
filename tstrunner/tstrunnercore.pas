@@ -125,6 +125,54 @@ begin
   p:=afile;
 end;
 
+type
+
+  { TFileInfoDelegate }
+
+  TFileInfoDelegate = class(TPlainSyntaxExecEnv)
+  public
+    finfo : TfileRunInfo;
+    constructor Create(Ainfo: TfileRunInfo);
+    procedure StartCommand(const rawCmd, finalCmd: TPlainCommand); override;
+    procedure CommandFinished(rawCmd: TPlainCommand; res: TCommandExecResult); override;
+    procedure EchoMsg(const msg: string; cmd: TPlainCommand); override;
+    procedure ErrorMsg(const msg: string; cmd: TPlainCommand); override;
+    procedure LogMsg(const msg: string; cmd: TPlainCommand); override;
+  end;
+
+{ TFileInfoDelegate }
+
+constructor TFileInfoDelegate.Create(Ainfo: TfileRunInfo);
+begin
+
+end;
+
+procedure TFileInfoDelegate.StartCommand(const rawCmd, finalCmd: TPlainCommand);
+begin
+  Verbose('  run command: '+ finalCmd.cmd);
+end;
+
+procedure TFileInfoDelegate.CommandFinished(rawCmd: TPlainCommand;
+  res: TCommandExecResult);
+begin
+  Verbose('  end command: '+ res.cmd.cmd);
+end;
+
+procedure TFileInfoDelegate.EchoMsg(const msg: string; cmd: TPlainCommand);
+begin
+  Verbose('  ECHO: '+msg);
+end;
+
+procedure TFileInfoDelegate.ErrorMsg(const msg: string; cmd: TPlainCommand);
+begin
+  Verbose('  CMD ERROR: '+msg);
+end;
+
+procedure TFileInfoDelegate.LogMsg(const msg: string; cmd: TPlainCommand);
+begin
+  Verbose('  CMD LOG: '+msg);
+end;
+
 { TFileRunInfo }
 
 procedure TFileRunInfo.ExecProc;
@@ -165,6 +213,8 @@ begin
   done := false;
   fn := scriptFn;
   exec := TPlainSyntaxExec.Create;
+  exec.Delegate := TFileInfoDelegate.Create(SElf);
+  delegate := exec.Delegate;
   exec.Params.Values['subject']:=subjecTfile;
   exec.Params.Values['subj']:=subjecTfile;
   exec.Params.Values['subjdir']:=ExtractFileDir(subjecTfile);
