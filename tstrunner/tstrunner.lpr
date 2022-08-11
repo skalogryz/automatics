@@ -61,6 +61,7 @@ begin
   try
     Target := TStringList.Create;
     try
+      InitTestInput(inp);
       Target.CaseSensitive := {$ifdef linux}true{$else}false{$endif};
       Target.Duplicates  := dupIgnore;
       ParseParams;

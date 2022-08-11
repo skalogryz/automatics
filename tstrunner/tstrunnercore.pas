@@ -5,32 +5,54 @@ unit tstrunnercore;
 interface
 
 uses
-  Classes, SysUtils, ExtraFileUtils;
+  Classes, SysUtils, ExtraFileUtils
+  ,plainsyntaxtype
+  ,plainsyntaxexeccond
+  ,plainsyntaxexec;
 
 type
   TTestInput = record
-    subject : string;
+    subject   : string;    // subject test file (the executable)
+    maxPara   : Integer;   // maximum parallel executions
+  end;
+
+  { TFileRunInfo }
+
+  TFileRunInfo = class
+  protected
+    fn  : string;
+    procedure ExecProc;
+  public
+    delegate : TObject;
+    exec     : TPlainSyntaxExec;
+    execThr  : TThread;
+    done     : Boolean;
+    destructor Destroy; override;
+    function IsRunning: Boolean;
+    procedure Start(const scriptFn, subjectFile: string);
   end;
 
   { TTestPerformer }
 
   TTestPerformer = class(TObject)
   private
-    filesToTest : TStringList;
+    filesToTest : TStringList; // of TFileRunInfo
     filesIdx    : integer;
-    dirToTest   : TStringList;
+    dirToTest   : TStringList; // of
     dirDone     : Boolean;
     pendingProc : TList;
     ctrlThread  : TThread;
     cancel      : Boolean;
     fileExt     : TStringList;
+    maxPara     : integer;
+    subject     : string;
 
   protected
     procedure ControlThreadProc;
     procedure StartDirSearch;
     procedure CheckDirSearch;
     procedure VerifyFilesFromDirSearch(l: TStringList);
-    procedure CheckTestFiles;
+    function CheckTestFiles: Integer;
   public
     constructor Create;
     destructor Destroy; override;
@@ -41,6 +63,10 @@ type
   end;
 
 procedure PerformTests(Target: TStringList; const inp : TTestInput);
+procedure InitTestInput(out inp: TTestInput);
+
+const
+  DEFAULT_PARALLEL = 8; // in fact is should 100500
 
 implementation
 
@@ -73,6 +99,78 @@ begin
   end;
 end;
 
+{ TFileRunThread }
+
+type
+  TFileRunThread = class(TThread)
+  protected
+    p : TFileRunInfo;
+    procedure Execute; override;
+  public
+    constructor Create(afile: TFileRunInfo);
+  end;
+
+procedure TFileRunThread.Execute;
+begin
+  try
+    p.ExecPRoc;
+  except
+  end;
+end;
+
+constructor TFileRunThread.Create(afile: TFileRunInfo);
+begin
+  inherited Create(true);
+  p:=afile;
+end;
+
+{ TFileRunInfo }
+
+procedure TFileRunInfo.ExecProc;
+var
+  cmds : TList;
+  i    : integer;
+begin
+  cmds:=nil;
+  try
+    cmds := ReadPlainCommandFile(fn);
+    exec.RunCommands(cmds);
+  finally
+    done := true;
+    if (cmds<>nil) then begin
+      for i := 0 to cmds.Count-1 do TObject(cmds[i]).Free;
+      cmds.Free;
+    end;
+  end;
+end;
+
+destructor TFileRunInfo.Destroy;
+begin
+  delegate.Free;
+  inherited Destroy;
+end;
+
+function TFileRunInfo.IsRunning: Boolean;
+begin
+  Result := Assigned(execThr)
+       and (not execThr.Finished)
+       and not done;
+end;
+
+procedure TFileRunInfo.Start(const scriptFn, subjectFile: string);
+begin
+  done := false;
+  fn := scriptFn;
+  exec := TPlainSyntaxExec.Create;
+  exec.Params.Values['subject']:=subjecTfile;
+  exec.Params.Values['subj']:=subjecTfile;
+  exec.Params.Values['subjdir']:=ExtractFileDir(subjecTfile);
+  exec.CurDir := ExtractFileDir(scriptFn);
+
+  execThr := TFileRunThread.Create(Self);
+  execThr.Start;
+end;
+
 { TControlThread }
 
 procedure TControlThread.Execute;
@@ -93,17 +191,21 @@ end;
 
 procedure TTestPerformer.ControlThreadProc;
 var
-  i    : integer;
   lfn  : TStringList;
 begin
   StartDirSearch;
 
   lfn := TStringList.Create;
   try
-    while true do begin
+    while not cancel do begin
       if not dirDone then begin
         CheckDirSearch;
         dirDone := dirToTest.Count=0;
+      end;
+
+      if CheckTestFiles = 0 then begin
+        if dirDone then
+          break;
       end;
     end;
   finally
@@ -147,9 +249,42 @@ begin
   end;
 end;
 
-procedure TTestPerformer.CheckTestFiles;
+function TTestPerformer.CheckTestFiles: Integer;
+var
+  i    : Integer;
+  fi   : Integer;
+  used : integer;
+  info : TFileRunInfo;
 begin
+  // checking ran files
+  used := 0;
+  fi := -1;
+  for i := 0 to filesToTest.Count-1 do begin
+    info := TFileRunInfo(filesToTest.Objects[i]);
+    if info = nil then begin
+      fi := i;
+      Break;
+    end else begin
+      if info.IsRunning then
+        inc(used);
+    end;
+  end;
 
+  // scheduling the new files
+  if (fi>=0) then begin
+    for i := fi to filesToTest.Count-1 do begin
+      info := TFileRunInfo(filesToTest.Objects[i]);
+      if info <> nil then continue;
+
+      info := TFileRunInfo.Create;
+      writeln(stderr,'starting: ', filesToTest[i]);
+      info.Start(filesToTest[i], subject);
+      filesToTest.Objects[i] := info;
+      inc(used);
+      if (used >= maxPara) then break;
+    end;
+  end;
+  Result := used;
 end;
 
 procedure TTestPerformer.StartDirSearch;
@@ -191,7 +326,11 @@ var
   i           : integer;
 begin
   // initial collecting  of files and directories to test
-  writeln('target= ',Target.Count);
+  cancel := false;
+  maxPara := inp.maxPara;
+  subject := inp.subject;
+  if (maxPara <= 0) then maxPara := DEFAULT_PARALLEL;
+
   for i:=0 to Target.Count-1 do begin
     d := Target[i];
     if DirectoryExists(d) then
@@ -220,6 +359,12 @@ end;
 procedure TTestPerformer.Abort;
 begin
 
+end;
+
+procedure InitTestInput(out inp: TTestInput);
+begin
+  inp.subject := '';
+  inp.maxPara := DEFAULT_PARALLEL;
 end;
 
 end.
