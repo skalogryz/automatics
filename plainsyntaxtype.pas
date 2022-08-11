@@ -32,9 +32,6 @@ type
     procedure ParseLine(const ins: string);
   end;
 
-procedure GetFirstWord(const s: string; out idx: integer; out w: string);
-function IsOneLineCommand(const cmd: string): boolean;
-
 function ReadPlainCommandFile(const fn: string): TList;
 
 function UnixUnescape(const s : string): string;
@@ -85,25 +82,6 @@ begin
     Result := s
   else
     Result := Result + Copy(s, j, length(s)-j+1);
-end;
-
-procedure GetFirstWord(const s: string; out idx: integer; out w: string);
-var
-  i : integer;
-begin
-  i := 1;
-  while (i<=length(s)) and (s[i] in [#32,#9]) do inc(i);
-  idx := i;
-  while (i<=length(s)) and not (s[i] in [#32,#9]) do inc(i);
-  w := Copy(s, idx, i -idx);
-end;
-
-function IsOneLineCommand(const cmd: string): boolean;
-begin
-  if cmd = 'cd' then Result:=true
-  else if cmd ='env' then Result:=true
-  else
-    Result := false;
 end;
 
 { TPlainCommand }
