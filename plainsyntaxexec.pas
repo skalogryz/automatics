@@ -450,6 +450,7 @@ var
   i : integer;
 begin
   c := TPlainCommand.Create;
+  c.lineNum :=src.lineNum;
   c.lines.Assign(src.lines);
 
   c.ParseCommand;
