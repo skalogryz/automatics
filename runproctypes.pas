@@ -276,7 +276,7 @@ begin
   fn := IncludeTrailingPathDelimiter(fTempDir)+name;
   if not FileExists(fn) then begin
     try
-      Result := TFileStream.Create(fn, fmCreate, fmShareDenyNone);
+      Result := TFileStream.Create(fn, fmCreate or fmShareDenyNone);
       try
       finally
         Result.Free;
@@ -284,7 +284,7 @@ begin
     except
     end;
   end;
-  Result := TFileStream.Create( IncludeTrailingPathDelimiter(fTempDir)+name, fmOpenReadWrite, fmShareDenyNone);
+  Result := TFileStream.Create( IncludeTrailingPathDelimiter(fTempDir)+name, fmOpenReadWrite or fmShareDenyNone);
 end;
 
 procedure TRunProcess.WaitEvents(timeLeft: Int64);

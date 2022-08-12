@@ -86,8 +86,8 @@ var
   buf1, buf2 : array of byte;
   c1, c2 : integer;
 begin
-  fs1:=TfileStream.Create(args[0], fmOpenRead, fmShareDenyNone);
-  fs2:=TfileStream.Create(args[1], fmOpenRead, fmShareDenyNone);
+  fs1:=TfileStream.Create(args[0], fmOpenRead or fmShareDenyNone);
+  fs2:=TfileStream.Create(args[1], fmOpenRead or fmShareDenyNone);
   try
     res.bool := fs1.Size = fs2.Size;
     if not res.bool then Exit;
@@ -113,7 +113,7 @@ var
   st  : string;
   sub : string;
 begin
-  fs1:=TfileStream.Create(args[1], fmOpenRead, fmShareDenyNone);
+  fs1:=TfileStream.Create(args[1], fmOpenRead or fmShareDenyNone);
   try
     sub := args[0];
     if (fs1.Size = 0) then begin
