@@ -12,7 +12,8 @@ procedure Log(const s: string); overload;
 procedure Log(const fmt: string; const args : array of const); overload;
 procedure Warn(const s: string);
 procedure Error(const s: string);
-procedure Verbose(const s: string);
+procedure Verbose(const s: string); overload;
+procedure Verbose(const fmt: string; const args : array of const); overload;
 
 var
   EnableLog: Boolean = true;
@@ -69,6 +70,11 @@ end;
 procedure Verbose(const s: string);
 begin
   if EnableVerbose then DoLog('', s);
+end;
+
+procedure Verbose(const fmt: string; const args : array of const); overload;
+begin
+  if EnableVerbose then DoLog('', Format(fmt, args));
 end;
 
 initialization

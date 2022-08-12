@@ -283,15 +283,17 @@ var
   i    : integer;
   srch : TAsyncFileSearch;
   lfn  : TStringList;
+  sr   : Boolean;
 begin
   lfn := TStringList.Create;
   try
     for i := dirToTest.Count-1 downto 0 do begin
       srch := TAsyncFileSearch(dirToTest.Objects[i]);
       lfn.Clear;
+      sr := srch.IsSearching;
       if srch.GatherNewFound(lfn) > 0 then
         VerifyFilesFromDirSearch(lfn);
-      if not srch.IsSearching then begin
+      if not sr then begin
         srch.Free;
         dirToTest.Delete(i);
       end;
@@ -309,6 +311,7 @@ begin
   if (l = nil) or (l.Count = 0) then Exit;
   for i:=0 to l.Count-1 do begin
     x := AnsiLowerCase( ExtractFileExt(l[i]));
+    Verbose('found: (%s) %s', [x, l[i]]);
     if (fileExt.IndexOf(x)>=0) then begin
       Log('scheduling the file: %s', [l[i]]);
       filesToTest.Add(l[i]);
