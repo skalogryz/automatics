@@ -34,6 +34,11 @@ type
 
 function DeleteDirectory(const dir: string): Boolean;
 
+// replaces all the slashes to system native slashes
+// \ - windows
+// / - for unix systems (anything but windows)
+function SlashToNative(const s: string): string;
+
 implementation
 
 type
@@ -214,6 +219,15 @@ begin
     FindClose(sr);
   end;
   Result := RemoveDir(based);
+end;
+
+
+function SlashToNative(const s: string): string;
+const
+  Native  = {$ifdef mswindows}'\'{$else}'/'{$endif};
+  Hostile = {$ifdef mswindows}'/'{$else}'\'{$endif};
+begin
+  Result := StringReplace(s, Hostile, Native, [rfReplaceAll]);
 end;
 
 end.

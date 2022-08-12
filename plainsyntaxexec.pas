@@ -6,7 +6,7 @@ interface
 
 uses
   Classes, SysUtils,
-  fpexprpars,
+  fpexprpars, ExtraFileUtils,
   runproctypes, plainsyntaxtype, runtesttypes;
 
 type
@@ -65,6 +65,7 @@ type
     LastExitCode  : Integer;
 
     CurTimeOut    : Integer;
+    DefTimeOut    : Integer; // the default timeout.
     CurDir        : string;
     HasTestResult : Boolean; // set to true, if commands did include any commands
     FinalResult   : TTestResult;
@@ -320,7 +321,7 @@ begin
     Exit;
   end;
 
-  res.procInp.exec := c.args[0];
+  res.procInp.exec := SlashToNative(c.args[0]);
   res.procInp.timeOutMs := CurTimeOut;
   res.procInp.rundir := CurDir;
   res.procInp.stdErrToFile:=sdPipeOnly;
@@ -394,7 +395,7 @@ begin
       if not ran then begin
         ErrorMsg(InvalidParams);
       end;
-      CurDir := c.args[0]
+      CurDir := SlashToNative(c.args[0]);
     end else if (c.cmd = CMD_ECHO) then begin
       EchoMsg(ArgsToOneLine(c.args));
     end else if (c.cmd = CMD_RUN) then begin
@@ -453,7 +454,7 @@ end;
 constructor TPlainSyntaxExec.Create;
 begin
   inherited Create;
-
+  DefTimeOut := -1;
   CurTimeOut := -1;
   CurDir := GetCurrentDir;
   DefaultResult := trUnableToRun;
