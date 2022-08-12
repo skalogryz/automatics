@@ -73,6 +73,7 @@ type
     CommandLogs   : TList; // array of TCommandExecResult
     Params        : TStringList; // key/value
     Delegate      : TPlainSyntaxExecEnv;
+    FailMessage   : string;
     constructor Create;
     destructor Destroy; override;
     procedure RunCommands(cmds: TList);
@@ -396,6 +397,14 @@ begin
         ErrorMsg(InvalidParams);
       end;
       CurDir := SlashToNative(c.args[0]);
+    end else if (c.cmd = CMD_FAILMSG) then begin
+      failMessage := ArgsToOneLine(c.args);
+    end else if (c.cmd = CMD_TIMEOUT) then begin
+      if not GetTimeOutMs(ArgsToOneLine(c.args), CurTimeOut) then begin
+        Log('Invalid time out line: ' + ArgsToOneLine(c.args)+', defaulting');
+        CurTimeOut := DefTimeOut;
+      end;
+      Log('Time out is: '+IntToStr(CurTimeOut));
     end else if (c.cmd = CMD_ECHO) then begin
       EchoMsg(ArgsToOneLine(c.args));
     end else if (c.cmd = CMD_RUN) then begin

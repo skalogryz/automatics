@@ -51,6 +51,13 @@ const
   CMD_ASSES  = 'assess';
   CMD_ASSERT = 'assert';
 
+  CMD_FAILMSG = 'failmsg';
+  CMD_TIMEOUT = 'timeout';
+
+  CMD_STORE   = 'store'; // probe,
+
+function GetTimeOutMs(const ts: string; out ms: Integer): Boolean;
+
 implementation
 
 function UnixUnescape(const s : string): string;
@@ -235,6 +242,7 @@ begin
     inc(j);
   end;
 
+
 end;
 
 procedure UpdateCommandAlias(c: TPlainCommand);
@@ -243,6 +251,39 @@ begin
     or (c.cmd = CMD_ASSES)
     or (c.cmd = CMD_ASSERT) then
     c.cmd := CMD_EXPECT;
+end;
+
+function GetTimeOutMs(const ts: string; out ms: Integer): Boolean;
+var
+  i : integer;
+  s : string;
+  d : double;
+  err : integer;
+begin
+  s := AnsiLowercase(Trim(ts));
+  if s = 'never' then begin
+    ms := -1;
+    Result := true;
+    Exit;
+  end;
+  i:=1;
+
+  while (i<=length(s)) and (s[i] in ['+','-']) do inc(i);
+  while (i<=length(s)) and (s[i] in ['0'..'9','.']) do inc(i);
+  Val(Copy(s, 1, i-1), d, err);
+  if (err <> 0) then begin
+    ms := 0;
+    Result := false;
+  end;
+  s := Trim(Copy(s, i, length(s)));
+  if (s = 's') or (s = 'sec') or (s = 'second') or (s='seconds') then
+    ms := Round(d * 1000)
+  else if (s = 'min') or (s = 'minute') or (s = 'minutes') then
+    ms := Round(ms * 1000 * 60)
+  else if (s = '') or (s = 'ms') or (s = 'milliseconds') or (s = 'millisecond') or (s = 'milisecond') or (s = 'milisecond')then
+    ms := Round(ms)
+  else
+    Result := false; // unknown suffix
 end;
 
 end.
