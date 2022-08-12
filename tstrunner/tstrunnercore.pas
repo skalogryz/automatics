@@ -22,9 +22,9 @@ type
 
   TFileRunInfo = class
   protected
-    fn  : string;
     procedure ExecProc;
   public
+    fn       : string;
     delegate : TObject;
     exec     : TPlainSyntaxExec;
     execThr  : TThread;

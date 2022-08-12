@@ -7,7 +7,7 @@ uses
   cthreads,
   {$ENDIF}
   Classes, SysUtils, tstrunnercore, tstrunnerlog, runtesttypes
-  ,ExtraFileUtils;
+  ,ExtraFileUtils, tstrunnerbi;
 
 var
   ShowHelp : Boolean = false;
@@ -16,6 +16,7 @@ var
   Target   : TStringList;
   res      : TStringList;
   outFn    : string;
+  startTime : TDateTime;
 
 procedure PrintHelp;
 begin
@@ -32,39 +33,27 @@ begin
   writeln(' -h - show help');
 end;
 
-procedure ResultsToCSV(var dst: Text; res: TStringList);
-var
-  i : integer;
-  info : TFileRunInfo;
-begin
-  res.Sort;
-  write(dst, FormatDateTime('yyyy-mm-dd hh:nn:ss:zzz', now));
-  writeln(dst);
-  write(dst, inp.subject);
-  writeln(dst);
-  writeln(dst, 'test,filename,result');
-  for i := 0 to res.Count-1 do begin
-    info := TFileRunInfo(res.Objects[i]);
-    write(dst,  ExtractFileName(res[i]) );
-    write(dst, ',', res[i]);
-    write(dst, ',', TestResultNameStr[info.GetTestResult()]);
-    writeln(dst);
-  end;
-end;
-
 procedure ResultsToCSV(res: TStringList);
 var
   f : Text;
+  reps  :TList;
 begin
-  if outFn = ''
-    then ResultsToCsv(StdOut, res)
-  else begin
-    AssignFile(f, outFn); Rewrite(f);
-    try
-      ResultsToCsv(f, res);
-    finally
-      CloseFile(f);
+  reps := TList.Create;
+  try
+    ResultsToRepEntries(res, inp.Subject, FormatDateTime('yyyy-mm-dd hh:nn:ss:zzz', startTime), reps);
+    if outFn = ''
+      then ReportCSV(defaultColumns, reps, StdOut)
+    else begin
+      AssignFile(f, outFn); Rewrite(f);
+      try
+        ReportCSV(defaultColumns, reps, f);
+      finally
+        CloseFile(f);
+      end;
     end;
+  finally
+    ReleaseRepEntries(reps);
+    reps.Free;
   end;
 end;
 
@@ -133,6 +122,7 @@ begin
       end;
 
       Log('starting. Subject: "%s"', [inp.subject]);
+      startTime := Now;
       PerformTests(Target, inp, res);
       if (res.Count>0) then begin
         Log('producing results');
