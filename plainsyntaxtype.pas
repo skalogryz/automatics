@@ -16,6 +16,7 @@ type
     cmd    : string; // lower case of rawcmd
     rawcmd : string;
     args   : TStringList;
+    lineNum : Integer; // line number in the file
     constructor Create;
     destructor Destroy; override;
     procedure ParseCommand;
@@ -24,6 +25,8 @@ type
   { TPlainParser }
 
   TPlainParser = class(TObject)
+  private
+    lineCount: Integer;
   public
     curcmd   : TPlainCommand;
     commands : TList;
@@ -161,7 +164,9 @@ end;
 
 constructor TPlainParser.Create;
 begin
+  inherited Create;
   commands := TList.Create;
+  lineCount := 0;
 end;
 
 destructor TPlainParser.Destroy;
@@ -174,6 +179,7 @@ procedure TPlainParser.ParseLine(const ins: string);
 var
   s : string;
 begin
+  inc(lineCount);
   s := Trim(ins);
   if Pos('#',s)=1 then Exit;
   if Pos('//',s)=1 then Exit;
@@ -183,6 +189,7 @@ begin
   end;
   if (curcmd = nil) then begin
     curcmd := TPlainCommand.Create;
+    curcmd.lineNum := lineCount;
     commands.Add(curcmd);
   end;
   curcmd.lines.Add(s);
