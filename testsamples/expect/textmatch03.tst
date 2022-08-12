@@ -1,2 +1,2 @@
 # those should fail
-expect TextMatch('otherworld.txt', 'helloworld.txt')
+expect TextMatch('otherworld.txt', 'helloworld.txt' ,'')
