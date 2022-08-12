@@ -6,7 +6,8 @@ uses
   {$IFDEF UNIX}
   cthreads,
   {$ENDIF}
-  Classes, SysUtils, tstrunnercore, tstrunnerlog, runtesttypes;
+  Classes, SysUtils, tstrunnercore, tstrunnerlog, runtesttypes
+  ,ExtraFileUtils;
 
 var
   ShowHelp : Boolean = false;
@@ -100,7 +101,7 @@ begin
           outFn:= ParamStr(i);
       end;
     end else
-      Target.Add(p);
+      Target.Add(SlashToNative(p));
 
     inc(i);
   end;
