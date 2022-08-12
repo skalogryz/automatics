@@ -135,6 +135,7 @@ end;
 procedure RegisterExtraProc;
 begin
   RegisterCondFunc('filexists', TExtraFunc.FileExists, tpBool, [tpString]);
+  RegisterCondFunc('fileexists', TExtraFunc.FileExists, tpBool, [tpString]);
   RegisterCondFunc('textmatch', TExtraFunc.TextMatch, tpBool, [tpString,tpString]);
   RegisterCondFunc('binmatch', TExtraFunc.BinMatch, tpBool, [tpString,tpString]);
   RegisterCondFunc('posinfile', TExtraFunc.PosInFile, tpInt, [tpString,tpString]);
