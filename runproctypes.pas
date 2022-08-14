@@ -388,8 +388,8 @@ begin
   res.endTick:=fEndTick;
   res.outSize:=fOutSize;
   res.errSize:=fErrSize;
-  res.stdErrFn:=fOutFn;
-  res.stdOutFn:=fErrFn;
+  res.stdOutFn:=fOutFn;
+  res.stdErrFn:=fErrFn;
   res.isRunning:=isRunning;
   res.runError:=fRunError;
   res.runSysErr:=fRunSysError;
