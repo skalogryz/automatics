@@ -1,0 +1,3 @@
+# this is the listing of two basic commands
+cd hello world
+run some command
