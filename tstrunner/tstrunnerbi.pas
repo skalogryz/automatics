@@ -24,11 +24,13 @@ procedure FileRunInfoToRep(info: TFileRunInfo; entry: TStrings);
 const
   data_Subject     = 'subject';
   data_RunTestDate = 'starttimestamp';
-  data_FileName    = 'filename';  // just the filename of the .tst
-  data_FullName    = 'fullname';  // jull path of the file of the .tst file
-  data_Dir         = 'pathname';  // the name of the directory of the .tst file
-  data_Result      = 'result';    // the string value of the test result: Success, Fail, Unable to Run
-  data_UnRunLine   = 'unrunline'; // unable to run reason line
+  data_FileName    = 'filename';       // just the filename of the .tst
+  data_FullName    = 'fullname';       // jull path of the file of the .tst file
+  data_Dir         = 'pathname';       // the name of the directory of the .tst file
+  data_Result      = 'result';         // the string value of the test result: Success, Fail, Unable to Run
+  data_UnRunLine   = 'unrunline';      // unable to run caused line
+  data_UnRunReason = 'unrunreason';    // unable to run reason string
+  data_FailReason  = 'failmsg';        // failure message
 
   defaultColumns : TStringList = nil;
 
@@ -129,9 +131,16 @@ begin
   end;
 
   if (r = trUnableToRun) and Assigned(lc) then begin
-    entry.Values[data_UnRunLine]:=IntToStr(lc.lineNum)
-  end else
+    entry.Values[data_UnRunLine]:=IntToStr(lc.lineNum);
+    entry.Values[data_UnRunReason]:=exec.UnrunReason;
+  end else begin
     entry.Values[data_UnRunLine]:='';
+    entry.Values[data_UnRunReason]:='';
+  end;
+  if (r = trFail) then
+    entry.Values[data_FailReason]:=exec.FailMessage
+  else
+    entry.Values[data_FailReason]:='';
 end;
 
 procedure FileRunInfoToRep(info: TFileRunInfo; entry: TStrings);
@@ -164,7 +173,9 @@ initialization
   //defaultColumns.Add(data_FullName);
   defaultColumns.Add(data_Dir);
   defaultColumns.Add(data_Result);
+  defaultColumns.Add(data_FailReason);
   defaultColumns.Add(data_UnRunLine);
+  defaultColumns.Add(data_UnRunReason);
 
 finalization
   defaultColumns.Free;
