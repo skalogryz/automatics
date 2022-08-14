@@ -26,6 +26,7 @@ begin
   writeln('commands: ',l.Count);
   for i:=0 to l.Count-1 do begin
     cmd := TPlainCommand(l[i]);
+    cmd.ParseCommand;
     writeln(cmd.cmd);
   end;
 end;
