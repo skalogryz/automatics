@@ -278,17 +278,18 @@ begin
   while (i<=length(s)) and (s[i] in ['+','-']) do inc(i);
   while (i<=length(s)) and (s[i] in ['0'..'9','.']) do inc(i);
   Val(Copy(s, 1, i-1), d, err);
-  if (err <> 0) then begin
+  Result := err = 0;
+  if not Result then begin
     ms := 0;
-    Result := false;
+    Exit;
   end;
   s := Trim(Copy(s, i, length(s)));
   if (s = 's') or (s = 'sec') or (s = 'second') or (s='seconds') then
     ms := Round(d * 1000)
   else if (s = 'min') or (s = 'minute') or (s = 'minutes') then
-    ms := Round(ms * 1000 * 60)
+    ms := Round(d * 1000 * 60)
   else if (s = '') or (s = 'ms') or (s = 'milliseconds') or (s = 'millisecond') or (s = 'milisecond') or (s = 'milisecond')then
-    ms := Round(ms)
+    ms := Round(d)
   else
     Result := false; // unknown suffix
 end;
