@@ -5,6 +5,10 @@ interface
 {$mode delphi}{$H+}
 
 uses
+  {$ifdef mswindows}
+  // this is only for error messages
+  Windows,
+  {$$endif}
   Classes, SysUtils,
   fpexprpars, ExtraFileUtils,
   runproctypes, plainsyntaxtype, runtesttypes;
@@ -63,6 +67,8 @@ type
     function CopyCmd(src: TPlainCommand): TPlainCommand;
   public
     LastExitCode  : Integer;
+    LastStdOutFn  : string;
+    LastStdErrFn  : string;
 
     CurTimeOut    : Integer;
     DefTimeOut    : Integer; // the default timeout.
@@ -279,6 +285,8 @@ begin
     try
       x.Identifiers.AddIntegerVariable('exitcode', LastExitCode);
       x.Identifiers.AddIntegerVariable('errorlevel', LastExitCode);
+      x.Identifiers.AddStringVariable('stdoutfn', LastStdOutFn);
+      x.Identifiers.AddStringVariable('stderrfn', LastStdErrFn);
       RegisterFuncInExprParser(x);
 
       x.Expression := cond;
@@ -303,9 +311,21 @@ begin
   except
     on e: exception do begin
       res.testResult := trUnableToRun;
-      ErrorMsg('error while evaluating '+ e.Message);
+      UnRunReason := 'error while evaluating '+ e.Message;
+      ErrorMsg(UnRunReason);
     end;
   end;
+end;
+
+function GetSystemMessageProcFail(code: integer): string;
+begin
+  Result := 'err code: '+IntToStr(code);
+  {$ifef mswindows}
+  case code of
+    0: Result := ''; // all is well
+    ERROR_FILE_NOT_FOUND: Result := 'File not found. ('+Result+')';
+  end;
+  {$endif}
 end;
 
 // returns true, if the process WAS able to run
@@ -348,6 +368,7 @@ begin
 
     if res.procRes.runError <> 0 then begin
       ErrorMsg('failed to run the process '+IntToStr(res.procRes.runSysErr));
+      UnrunReason:=GetSystemMessageProcFail(res.procRes.runSysErr);
     end else if res.procRes.timedOut then begin
       UnrunReason:='process timed out '+IntToStr(res.procRes.runTimeMs)+' ms';
       isTimeout := true;
@@ -414,8 +435,11 @@ begin
       EchoMsg(ArgsToOneLine(c.args));
     end else if (c.cmd = CMD_RUN) then begin
       LastExitCode := 0;
-      if ExecProcess(c, result, true) then
+      if ExecProcess(c, result, true) then begin
         LastExitCode := result.procRes.exitCode;
+        LastStdOutFn := result.procRes.stdOutFn;
+        LastStdErrFn := result.procRes.stdErrFn;
+      end;
     end else if (c.cmd = CMD_EXPECT) then begin
       ExecExpect(c, result);
     end else
