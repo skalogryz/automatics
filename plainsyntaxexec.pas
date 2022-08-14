@@ -74,6 +74,8 @@ type
     Params        : TStringList; // key/value
     Delegate      : TPlainSyntaxExecEnv;
     FailMessage   : string;
+    UnrunReason   : string;
+    isTimeout     : Boolean;
     constructor Create;
     destructor Destroy; override;
     procedure RunCommands(cmds: TList);
@@ -275,8 +277,8 @@ begin
   x := TFPExpressionParser.Create(nil);
   try
     try
-      x.Identifiers.AddIntegerVariable('exitcode', ExitCode);
-      x.Identifiers.AddIntegerVariable('errorlevel', ExitCode);
+      x.Identifiers.AddIntegerVariable('exitcode', LastExitCode);
+      x.Identifiers.AddIntegerVariable('errorlevel', LastExitCode);
       RegisterFuncInExprParser(x);
 
       x.Expression := cond;
@@ -335,6 +337,7 @@ begin
   ProcPrepareTempDir(res.procInp);
 
   Log('running process: "'+ res.procInp.exec+'"');
+  Log('using timeout: ' + intToStr(CurTimeOut));
   if (res.procInp.timeOutMs>0) then
     Log('process timeout: '+IntToStr(res.procInp.timeOutMs));
 
@@ -346,7 +349,9 @@ begin
     if res.procRes.runError <> 0 then begin
       ErrorMsg('failed to run the process '+IntToStr(res.procRes.runSysErr));
     end else if res.procRes.timedOut then begin
-      ErrorMsg('process timed out  '+IntToStr(res.procREs.runTimeMs));
+      UnrunReason:='process timed out '+IntToStr(res.procRes.runTimeMs)+' ms';
+      isTimeout := true;
+      ErrorMsg(UnrunReason);
     end else
       Log('process finished with code: '+IntToStr(res.procRes.exitCode));
     Log('temp directory: '+ res.procRes.tempDir);
@@ -522,6 +527,7 @@ begin
       Delegate.LogMsg('the script didn''t contain any result assessment, assuming default result ('+TestResultNameStr[DefaultResult]+')',nil);
       HasTestResult := true;
       FinalResult := DefaultResult;
+      if FinalResult = trUnableToRun then UnrunReason := 'no "expect" command specified';
     end;
     Delegate.LogMsg('the script result ('+TestResultNameStr[FinalResult]+')',nil);
 
