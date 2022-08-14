@@ -102,7 +102,7 @@ begin
       fn := GetWord(c,j);
       WriteBin(fn, trim(Copy(c, j, length(c))));
     end else if cc = 'exitcode' then begin
-      ExitCode := StrToIntDef( trim(Copy(c, j, length(c))), -1);
+      ExitCode := StrToIntDef( trim(Copy(c, j, length(c))), ExitCode);
     end;
   end;
 end;
