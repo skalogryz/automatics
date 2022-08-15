@@ -479,10 +479,11 @@ var
   i : integer;
 begin
   c := TPlainCommand.Create;
-  c.lineNum :=src.lineNum;
+  c.syntax := src.syntax;
+  c.lineNum := src.lineNum;
   c.lines.Assign(src.lines);
 
-  c.ParseCommand;
+  c.ParseCommand(Params);
   UpdateCommandAlias(c);
   c.cmd := ReplaceParams(c.cmd, Params);
   for i:=0 to c.args.Count-1 do

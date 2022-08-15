@@ -21,7 +21,8 @@ type
     lineNum : Integer; // line number in the file
     constructor Create;
     destructor Destroy; override;
-    procedure ParseCommand;
+    // if vars is nil, then all variables will be substituted to empty values
+    procedure ParseCommand(vars: TStrings);
   end;
 
   { TTemplateLine }
@@ -55,6 +56,9 @@ type
     function MultiLineChar: char; virtual;
     function ParseTemplateLine(const ln: string; var err: TSyntaxError): TTemplateLine; virtual;
     function IsCaseSensitive: Boolean; virtual;
+    // breaks out the line into the list of arguments.
+    // the input line doesn't contain any variables.
+    procedure LineToArgs(const ln: string; dst: TStrings; var err: TSyntaxError); virtual;
   end;
 
   { TPlainParser }
@@ -105,6 +109,7 @@ type
     function MultiLineChar: char; override;
     function ParseTemplateLine(const buf: string; var err: TSyntaxError): TTemplateLine; override;
     function IsCaseSensitive: Boolean; override;
+    procedure LineToArgs(const buf: string; args: TStrings; var err: TSyntaxError); override;
   end;
 
   { TShSyntax }
@@ -114,6 +119,7 @@ type
     function MultiLineChar: char; override;
     function ParseTemplateLine(const buf: string; var err: TSyntaxError): TTemplateLine; override;
     function IsCaseSensitive: Boolean; override;
+    procedure LineToArgs(const buf: string; args: TStrings; var err: TSyntaxError); override;
   end;
 
 var
@@ -123,6 +129,11 @@ var
 function GetNextWord(const s: string; var i : integer): string;
 
 procedure FreeTemplateLine(var l : TTemplateLine);
+
+// replaces l.text paramters with their actual values from vars
+procedure SubstitueValues(l : TTemplateLine; vars: TStrings; caseSensitive: Boolean);
+
+function TemplatesToStr(l: TTemplateLine): string;
 
 implementation
 
@@ -306,6 +317,36 @@ begin
   Result := true;
 end;
 
+procedure TShSyntax.LineToArgs(const buf: string; args: TStrings;
+  var err: TSyntaxError);
+var
+  i : integer;
+  j : integer;
+begin
+  i:=1;
+  while i<=length(buf) do begin
+    if buf[i] in ['"'] then begin
+      inc(i);
+      j := i;
+      while (i<=length(buf)) and (not (buf[i] in ['"'])) do begin
+        if (buf[i] = '\') and (i<length(buf)) and (buf[i+1] = '"') then
+          inc(i);
+        inc(i);
+      end;
+      args.Add( copy(buf, j, i-j) );
+      inc(i);
+    end else if not (buf[i] in [#9,#32]) then begin
+      j := i;
+      while (i<=length(buf)) and not (buf[i] in [#9,#32]) do
+        inc(i);
+      args.Add( copy(buf, j, i-j) );
+    end else
+      inc(i);
+  end;
+  for i:=0 to args.Count-1 do
+    args[i]:=UnixUnescape(args[i]);
+end;
+
 { TBatSyntax }
 
 function TBatSyntax.IsComment(const s: string): boolean;
@@ -385,6 +426,34 @@ begin
   Result := false;
 end;
 
+procedure TBatSyntax.LineToArgs(const buf: string; args: TStrings;
+  var err: TSyntaxError);
+var
+  i : integer;
+  j : integer;
+begin
+  i:=1;
+  while i<=length(buf) do begin
+    if buf[i] in ['"'] then begin
+      inc(i);
+      j := i;
+      while (i<=length(buf)) and (not (buf[i] in ['"'])) do begin
+        if (buf[i] = '\') and (i<length(buf)) and (buf[i+1] = '"') then
+          inc(i);
+        inc(i);
+      end;
+      args.Add( copy(buf, j, i-j) );
+      inc(i);
+    end else if not (buf[i] in [#9,#32]) then begin
+      j := i;
+      while (i<=length(buf)) and not (buf[i] in [#9,#32]) do
+        inc(i);
+      args.Add( copy(buf, j, i-j) );
+    end else
+      inc(i);
+  end;
+end;
+
 { TScriptSyntax }
 
 function TScriptSyntax.IsComment(const s: string): boolean;
@@ -407,6 +476,12 @@ begin
   Result := false;
 end;
 
+procedure TScriptSyntax.LineToArgs(const ln: string; dst: TStrings;
+  var err: TSyntaxError);
+begin
+
+end;
+
 { TPlainCommand }
 
 constructor TPlainCommand.Create;
@@ -423,12 +498,14 @@ begin
   inherited Destroy;
 end;
 
-procedure TPlainCommand.ParseCommand;
+procedure TPlainCommand.ParseCommand(vars: TStrings);
 var
   s : string;
   i   : integer;
   j   : integer;
   buf : string;
+  ln  : TTemplateLine;
+  err : TSyntaxError;
 begin
   args.Clear;
   cmd := '';
@@ -442,35 +519,22 @@ begin
   end;
   buf := buf + lines[lines.Count-1];
 
-  i:=1;
-  while i<=length(buf) do begin
-    if buf[i] in ['"'] then begin
-      inc(i);
-      j := i;
-      while (i<=length(buf)) and (not (buf[i] in ['"'])) do begin
-        if (buf[i] = '\') and (i<length(buf)) and (buf[i+1] = '"') then
-          inc(i);
-        inc(i);
-      end;
-      args.Add( copy(buf, j, i-j) );
-      inc(i);
-    end else if not (buf[i] in [#9,#32]) then begin
-      j := i;
-      while (i<=length(buf)) and not (buf[i] in [#9,#32]) do
-        inc(i);
-      args.Add( copy(buf, j, i-j) );
-    end else
-      inc(i);
-  end;
-  for i:=0 to args.Count-1 do
-    args[i]:=UnixUnescape(args[i]);
+  err.err := '';
+  err.pos := 0;
+  ln := syntax.ParseTemplateLine(buf, err);
+  SubstitueValues(ln, vars, syntax.IsCaseSensitive);
+  buf := TemplatesToStr(ln);
+  FreeTemplateLine(ln);
+
+  err.err := '';
+  err.pos := 0;
+  syntax.LineToArgs(buf, args, err);
 
   if (args.Count>0) then begin
     rawcmd := args[0];
     args.Delete(0);
     cmd := AnsiLowerCase(rawcmd);
   end;
-
 end;
 
 { TPlainParser }
@@ -624,6 +688,53 @@ begin
     FreeAndNil(l);
     l := t;
   end;
+end;
+
+procedure SubstitueValues(l : TTemplateLine; vars: TStrings; caseSensitive: Boolean);
+var
+  nv : string;
+begin
+  while Assigned(l) do begin
+    if l.isVar then begin
+      // todo: add support for functions
+      if Assigned(Vars) then
+        nv := Vars.Values[l.varName]
+      else
+        nv := '';
+      l.text := nv;
+    end;
+    l := l.next;
+  end;
+end;
+
+function TemplatesToStr(l: TTemplateLine): string;
+var
+  ln : integer;
+  i  : integer;
+  j  : integer;
+  t  : TTemplateLine;
+begin
+  ln := 0;
+  t := l;
+  while Assigned(t) do begin
+    inc(ln, length(t.text));
+    t := t.next;
+  end;
+
+  SetLength(Result, ln);
+  if ln = 0 then Exit;
+
+  i:=1;
+  t := l;
+  while Assigned(t) do begin
+    j := length(t.text);
+    if j>0 then begin
+      Move(t.text[1], Result[i], j);
+      inc(i, j);
+    end;
+    t := t.next;
+  end;
+
 end;
 
 initialization
