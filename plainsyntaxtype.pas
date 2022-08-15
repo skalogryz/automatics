@@ -8,10 +8,12 @@ uses
   Classes, SysUtils;
 
 type
+  TScriptSyntax = class;
 
   { TPlainCommand }
 
   TPlainCommand = class(TObject)
+    syntax : TScriptSyntax;
     lines  : TStringList;
     cmd    : string; // lower case of rawcmd
     rawcmd : string;
@@ -478,6 +480,7 @@ begin
   inherited Create;
   commands := TList.Create;
   lineCount := 0;
+  syntax := batSyntax;
 end;
 
 destructor TPlainParser.Destroy;
@@ -490,19 +493,23 @@ procedure TPlainParser.ParseLine(const ins: string);
 var
   s : string;
 begin
-  if (lineCount=0) and (ins = '#!/bin/bash') then
-    syntax := shSyntax;
+  if (lineCount=0) then begin
+    if (ins = '#!/bin/bash') then
+      syntax := shSyntax
+    else if (ins = '#batch') or (ins = '#bat') then
+      syntax := batSyntax;
+  end;
 
   inc(lineCount);
   s := Trim(ins);
-  if Pos('#',s)=1 then Exit;
-  if Pos('//',s)=1 then Exit;
+  if (syntax.IsComment(s)) then Exit;
   if s ='' then begin
     curcmd := nil;
     exit;
   end;
   if (curcmd = nil) then begin
     curcmd := TPlainCommand.Create;
+    curcmd.syntax := syntax;
     curcmd.lineNum := lineCount;
     commands.Add(curcmd);
   end;
