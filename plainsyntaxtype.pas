@@ -216,7 +216,8 @@ end;
 
 const
   SpaceChars = [#9,#32];
-  IdChars = ['a'..'z','A'..'Z','_'];
+  FirstIdChars = ['a'..'z','A'..'Z','_'];
+  IdChars = FirstIdChars+['0'..'9'];
 
 function TShSyntax.ParseTemplateLine(const buf: string; var err: TSyntaxError): TTemplateLine;
 var
@@ -278,8 +279,9 @@ begin
           err.err := 'command substitution is not supported';
           err.pos := i;
           exit;
-        end else if buf[i] in IdChars then begin
+        end else if buf[i] in FirstIdChars then begin
           // cases for $varname
+          inc(i);
           while (i<=length(buf)) and (buf[i] in IdChars) do
             inc(i);
           nm:=Copy(buf, j, i-j);
