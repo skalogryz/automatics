@@ -22,6 +22,39 @@ type
     procedure ParseCommand;
   end;
 
+  { TTemplateLine }
+
+  TTemplateLine = class(TObject)
+  public
+    text    : string;
+    isVar   : boolean;
+    varName : string;
+    next    : TTemplateLine;
+    func    : string; // the function to be applied to the value
+    funcparams : TStringList;
+    constructor Create; overload;
+    constructor Create(const atxt: string); overload;
+    constructor Create(const atxt, aname: string); overload;
+    procedure PushFuncParam(const paramVal: string);
+    destructor Destroy; override;
+  end;
+
+
+  TSyntaxError = record
+    err : string;
+    pos : integer;
+  end;
+
+  { TScriptSyntax }
+
+  TScriptSyntax = class(TObject)
+  public
+    function IsComment(const s: string): boolean; virtual;
+    function MultiLineChar: char; virtual;
+    function ParseTemplateLine(const ln: string; var err: TSyntaxError): TTemplateLine; virtual;
+    function IsCaseSensitive: Boolean; virtual;
+  end;
+
   { TPlainParser }
 
   TPlainParser = class(TObject)
@@ -30,6 +63,7 @@ type
   public
     curcmd   : TPlainCommand;
     commands : TList;
+    syntax   : TScriptSyntax;
     constructor Create;
     destructor Destroy; override;
     procedure ParseLine(const ins: string);
@@ -61,7 +95,44 @@ const
 
 function GetTimeOutMs(const ts: string; out ms: Integer): Boolean;
 
+type
+  { TBatSyntax }
+
+  TBatSyntax = class(TScriptSyntax)
+    function IsComment(const s: string): boolean; override;
+    function MultiLineChar: char; override;
+    function ParseTemplateLine(const buf: string; var err: TSyntaxError): TTemplateLine; override;
+    function IsCaseSensitive: Boolean; override;
+  end;
+
+  { TShSyntax }
+
+  TShSyntax = class(TScriptSyntax)
+    function IsComment(const s: string): boolean; override;
+    function MultiLineChar: char; override;
+    function ParseTemplateLine(const buf: string; var err: TSyntaxError): TTemplateLine; override;
+    function IsCaseSensitive: Boolean; override;
+  end;
+
+var
+  batSyntax : TBatSyntax = nil;
+  shSyntax  : TShSyntax = nil;
+
+function GetNextWord(const s: string; var i : integer): string;
+
+procedure FreeTemplateLine(var l : TTemplateLine);
+
 implementation
+
+function GetNextWord(const s: string; var i : integer): string;
+var
+  j : integer;
+begin
+  while (i<=length(s)) and (s[i] in [#32,#9]) do inc(i);
+  j:=i;
+  while (i<=length(s)) and not (s[i] in [#32,#9]) do inc(i);
+  Result := Copy(s, j, i-j);
+end;
 
 function UnixUnescape(const s : string): string;
 var
@@ -92,6 +163,244 @@ begin
     Result := s
   else
     Result := Result + Copy(s, j, length(s)-j+1);
+end;
+
+{ TTemplateLine }
+
+constructor TTemplateLine.Create;
+begin
+  inherited Create;
+end;
+
+constructor TTemplateLine.Create(const atxt: string);
+begin
+  Create;
+  text := atxt;
+end;
+
+constructor TTemplateLine.Create(const atxt, aname: string);
+begin
+  Create(atxt);
+  varName := aname;
+  isVar := aname<>'';
+end;
+
+procedure TTemplateLine.PushFuncParam(const paramVal: string);
+begin
+  if not Assigned(funcparams) then funcparams := TStringList.Create;
+  funcparams.Add(paramVal);
+end;
+
+destructor TTemplateLine.Destroy;
+begin
+  funcParams.Free;
+  inherited Destroy;
+end;
+
+{ TShSyntax }
+
+function TShSyntax.IsComment(const s: string): boolean;
+var
+  i : integer;
+  r : string;
+begin
+  i := 1;
+  r := GetNextWord(s, i);
+  Result:=(r<>'') and (r[1] = '#');
+end;
+
+function TShSyntax.MultiLineChar: char;
+begin
+  Result:='\';
+end;
+
+const
+  SpaceChars = [#9,#32];
+  IdChars = ['a'..'z','A'..'Z','_'];
+
+function TShSyntax.ParseTemplateLine(const buf: string; var err: TSyntaxError): TTemplateLine;
+var
+  i : integer;
+  j : integer;
+  head : TTemplateLine;
+  tail : TTemplateLine;
+  nm : string;
+
+  procedure Push(cur: TTemplateLine);
+  begin
+    if head = nil then head := cur;
+    if tail <> nil then tail.next := cur;
+    tail:=cur;
+  end;
+
+  procedure ConsumeText;
+  var
+    txt : string;
+  begin
+    txt := Copy(buf, j,i-j);
+    if txt<>'' then
+      Push(TTemplateLine.Create(txt));
+  end;
+
+begin
+  head := nil;
+  tail := nil;
+  try
+    i := 1;
+    j := 1;
+    while i<=length(buf) do begin
+      if (buf[i]= #39) then begin
+        inc(i);
+        // none of the variables is escaped
+        while (i<=length(buf)) and (buf[i] <> #39) do
+          inc(i);
+        inc(i);
+      end else if (buf[i]='$') then begin
+        ConsumeText;
+        j:=i;
+        inc(i);
+        if (i<=length(buf)) and (buf[i]='{') then begin
+          // cases for ${varname}
+          inc(i);
+          while (i<=length(buf)) and (buf[i]<>'}') do begin
+            if buf[i] in SpaceChars then begin
+              err.err := 'bad substitution';
+              err.pos := i;
+              exit;
+            end;
+            inc(i);
+          end;
+          inc(i);
+          nm:=Copy(buf, j, i-j);
+          Push(TTemplateLine.Create(nm, Copy(nm,3, length(nm)-3)));
+        end else if (i<=length(buf)) and (buf[i]='(') then begin
+          // cases for $(cmd)
+          err.err := 'command substitution is not supported';
+          err.pos := i;
+          exit;
+        end else if buf[i] in IdChars then begin
+          // cases for $varname
+          while (i<=length(buf)) and (buf[i] in IdChars) do
+            inc(i);
+          nm:=Copy(buf, j, i-j);
+          Push(TTemplateLine.Create(nm, Copy(nm,2, length(nm)-1)));
+        end else
+          // cases for $., $ $, etc
+          ConsumeText;
+        j:=i;
+      end else
+        inc(i);
+    end;
+    ConsumeText;
+  finally
+    Result := head;
+  end;
+end;
+
+function TShSyntax.IsCaseSensitive: Boolean;
+begin
+  Result := true;
+end;
+
+{ TBatSyntax }
+
+function TBatSyntax.IsComment(const s: string): boolean;
+var
+  i : integer;
+  r : string;
+begin
+  i := 1;
+  r := GetNextWord(s, i);
+  Result :=
+    (r = '::')
+    or (AnsiLowerCase(r)='rem')
+    // this is not Windows batch compatible:
+    or (r = '#');
+end;
+
+function TBatSyntax.MultiLineChar: char;
+begin
+  Result:='^';
+end;
+
+function TBatSyntax.ParseTemplateLine(const buf: string; var err: TSyntaxError): TTemplateLine;
+var
+  i : integer;
+  j : integer;
+  head : TTemplateLine;
+  tail : TTemplateLine;
+  nm : string;
+
+  procedure Push(cur: TTemplateLine);
+  begin
+    if head = nil then head := cur;
+    if tail <> nil then tail.next := cur;
+    tail:=cur;
+  end;
+
+  procedure ConsumeText;
+  var
+    txt : string;
+  begin
+    txt := StringReplace( Copy(buf, j,i-j),'%%','%',[rfReplaceAll]);
+    if txt<>'' then
+      Push(TTemplateLine.Create(txt));
+  end;
+
+begin
+  head := nil;
+  tail := nil;
+  i := 1;
+  j := 1;
+  while i<=length(buf) do begin
+    if (buf[i] = '%') and (i<length(buf)) and (buf[i+1]='%') then begin
+      inc(i);
+    end else if (buf[i]='%') then begin
+      ConsumeText;
+      j:=i;
+      inc(i);
+      while (i<=length(buf)) and (buf[i]<>'%') do inc(i);
+      if i>length(buf) then begin
+        inc(j); // skip the initial '%', closing was not found
+        ConsumeText;
+      end else begin
+        inc(i);
+        nm:=Copy(buf, j, i-j);
+        Push(TTemplateLine.Create(nm, Copy(nm,2, length(nm)-2)));
+      end;
+      j:=i;
+    end else
+      inc(i);
+  end;
+  ConsumeText;
+  Result := head;
+end;
+
+function TBatSyntax.IsCaseSensitive: Boolean;
+begin
+  Result := false;
+end;
+
+{ TScriptSyntax }
+
+function TScriptSyntax.IsComment(const s: string): boolean;
+begin
+  Result := false;
+end;
+
+function TScriptSyntax.MultiLineChar: char;
+begin
+  Result := #0;
+end;
+
+function TScriptSyntax.{%H-}ParseTemplateLine(const ln: string; var err: TSyntaxError): TTemplateLine;
+begin
+  Result := TTemplateLine.Create(ln);
+end;
+
+function TScriptSyntax.IsCaseSensitive: Boolean;
+begin
+  Result := false;
 end;
 
 { TPlainCommand }
@@ -179,6 +488,9 @@ procedure TPlainParser.ParseLine(const ins: string);
 var
   s : string;
 begin
+  if (lineCount=0) and (ins = '#!/bin/bash') then
+    syntax := shSyntax;
+
   inc(lineCount);
   s := Trim(ins);
   if Pos('#',s)=1 then Exit;
@@ -293,6 +605,26 @@ begin
   else
     Result := false; // unknown suffix
 end;
+
+procedure FreeTemplateLine(var l : TTemplateLine);
+var
+  t : TTemplateLine;
+begin
+  while Assigned(l) do begin
+    t := l.next;
+    FreeAndNil(l);
+    l := t;
+  end;
+end;
+
+initialization
+  batSyntax := TBatSyntax.Create;
+  shSyntax  := TShSyntax.Create;
+
+finalization
+  batSyntax.Free;
+  shSyntax.Free;
+
 
 end.
 
