@@ -5,7 +5,7 @@ unit plainsyntaxtype;
 interface
 
 uses
-  Classes, SysUtils;
+  Classes, SysUtils, ExtraFileUtils;
 
 type
   TScriptSyntax = class;
@@ -59,6 +59,8 @@ type
     // breaks out the line into the list of arguments.
     // the input line doesn't contain any variables.
     procedure LineToArgs(const ln: string; dst: TStrings; var err: TSyntaxError); virtual;
+
+    function PathsToScriptNative(const pth: string): string; virtual;
   end;
 
   { TPlainParser }
@@ -110,6 +112,7 @@ type
     function ParseTemplateLine(const buf: string; var err: TSyntaxError): TTemplateLine; override;
     function IsCaseSensitive: Boolean; override;
     procedure LineToArgs(const buf: string; args: TStrings; var err: TSyntaxError); override;
+    function PathsToScriptNative(const pth: string): string; override;
   end;
 
   { TShSyntax }
@@ -120,6 +123,7 @@ type
     function ParseTemplateLine(const buf: string; var err: TSyntaxError): TTemplateLine; override;
     function IsCaseSensitive: Boolean; override;
     procedure LineToArgs(const buf: string; args: TStrings; var err: TSyntaxError); override;
+    function PathsToScriptNative(const pth: string): string; override;
   end;
 
 var
@@ -292,7 +296,7 @@ begin
           err.err := 'command substitution is not supported';
           err.pos := i;
           exit;
-        end else if buf[i] in FirstIdChars then begin
+        end else if buf[i] in IdChars then begin
           // cases for $varname
           inc(i);
           while (i<=length(buf)) and (buf[i] in IdChars) do
@@ -345,6 +349,11 @@ begin
   end;
   for i:=0 to args.Count-1 do
     args[i]:=UnixUnescape(args[i]);
+end;
+
+function TShSyntax.PathsToScriptNative(const pth: string): string;
+begin
+  Result:=SlashToUnix(pth);
 end;
 
 { TBatSyntax }
@@ -454,6 +463,11 @@ begin
   end;
 end;
 
+function TBatSyntax.PathsToScriptNative(const pth: string): string;
+begin
+  Result:=SlashToWindows(pth);
+end;
+
 { TScriptSyntax }
 
 function TScriptSyntax.IsComment(const s: string): boolean;
@@ -480,6 +494,11 @@ procedure TScriptSyntax.LineToArgs(const ln: string; dst: TStrings;
   var err: TSyntaxError);
 begin
 
+end;
+
+function TScriptSyntax.PathsToScriptNative(const pth: string): string;
+begin
+  Result := pth;
 end;
 
 { TPlainCommand }

@@ -39,6 +39,9 @@ function DeleteDirectory(const dir: string): Boolean;
 // / - for unix systems (anything but windows)
 function SlashToNative(const s: string): string;
 
+function SlashToUnix(const s: string): string;
+function SlashToWindows(const s: string): string;
+
 implementation
 
 type
@@ -228,6 +231,16 @@ const
   Hostile = {$ifdef mswindows}'/'{$else}'\'{$endif};
 begin
   Result := StringReplace(s, Hostile, Native, [rfReplaceAll]);
+end;
+
+function SlashToUnix(const s: string): string;
+begin
+  Result := StringReplace(s, '\', '/', [rfReplaceAll]);
+end;
+
+function SlashToWindows(const s: string): string;
+begin
+  Result := StringReplace(s, '/', '\', [rfReplaceAll]);
 end;
 
 end.
