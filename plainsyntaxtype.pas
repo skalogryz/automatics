@@ -401,6 +401,10 @@ var
       Push(TTemplateLine.Create(txt));
   end;
 
+var
+  closePerc: Boolean;
+  ln: integer;
+
 begin
   head := nil;
   tail := nil;
@@ -413,15 +417,30 @@ begin
       ConsumeText;
       j:=i;
       inc(i);
-      while (i<=length(buf)) and (buf[i]<>'%') do inc(i);
-      if i>length(buf) then begin
-        inc(j); // skip the initial '%', closing was not found
-        ConsumeText;
+      if (i<=length(buf)) and (buf[i] in ['~','0'..'9']) then begin
+        closePerc := false;
+        if buf[i] = '~' then begin
+          inc(i);
+          while (i<=length(buf)) and not (buf[i] in ['0'..'9',' ',#9]) do
+            inc(i);
+        end;
+        while (i<=length(buf)) and (buf[i] in ['0'..'9']) do inc(i);
       end else begin
-        inc(i);
-        nm:=Copy(buf, j, i-j);
-        Push(TTemplateLine.Create(nm, Copy(nm,2, length(nm)-2)));
+        closePerc := true;
+        while (i<=length(buf)) and (buf[i]<>'%') do inc(i);
+        if i>length(buf) then begin
+          inc(j); // skip the initial '%', closing was not found
+          ConsumeText;
+          j := i;
+          break; // end of the line
+        end else
+          inc(i);
       end;
+
+      nm:=Copy(buf, j, i-j);
+      if closePerc then ln := length(nm)-2
+      else ln := length(nm)-1;
+      Push(TTemplateLine.Create(nm, Copy(nm,2, ln)));
       j:=i;
     end else
       inc(i);
