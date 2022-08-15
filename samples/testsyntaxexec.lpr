@@ -5,8 +5,8 @@ program testsyntaxexec;
 uses
   {$IFDEF UNIX}
   cthreads,
-  {$ENDIF}
-  Classes, plainsyntaxtype, plainsyntaxexec
+  {$ENDIF} SysUtils,
+  Classes, plainsyntaxtype, plainsyntaxexec, ExtraFileUtils
   { you can add units after this };
 
 procedure ExecFile(const fn: string);
@@ -14,13 +14,20 @@ var
   i    : integer;
   exec : TPlainSyntaxExec;
   cmds : TList;
+  stx  : TScriptSyntax;
 begin
   cmds := ReadPlainCommandFile(fn);
+  if not ASsigned(cmds) or (cmds.Count=0) then Exit;
+
+  stx := TPlainCommand(cmds[0]).Syntax;
   exec := TPlainSyntaxExec.Create;
   exec.Delegate := TPlainSyntaxExecStdErrEnv.Create;
   try
-    exec.Params.Values['subj']:='run.exe';
-    exec.Params.Values['subject']:='run.exe';
+    exec.Params.Values['subj']:='pet.exe';
+    exec.Params.Values['subject']:='pet.exe';
+
+    exec.Params.Values['0']:='"'+stx.PathsToScriptNative(ExpandFileName(fn))+'"';
+    exec.Params.Values['1']:=stx.PathsToScriptNative(exec.Params.Values['subj']);
     exec.RunCommands(cmds);
   finally
     exec.Delegate.Free;
