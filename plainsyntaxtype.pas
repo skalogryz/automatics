@@ -80,6 +80,7 @@ type
 function ReadPlainCommandFile(const fn: string): TList;
 
 function UnixUnescape(const s : string): string;
+function WindowsUnescape(const s : string): string;
 
 // converting TStrings to a single string
 function ArgsToOneLine(s : TStrings): string;
@@ -454,29 +455,55 @@ begin
   Result := false;
 end;
 
+// presumably the %% has alredy been replaced with %
+// thus no replacing here
+function WindowsUnescape(const s : string): string;
+var
+  i : integer;
+  j : integer;
+begin
+  Result := '';
+  i := 1;
+  j := 1;
+  while i <= length(s) do begin
+    if s[i]='^' then begin
+      Result := Result+Copy(s, j, i-j);
+      inc(i);
+      if (i<=length(s)) then begin
+        Result:=Result+s[i];
+        inc(i);
+      end;
+      j := i;
+    end;
+    inc(i);
+  end;
+  if Result = '' then Result :=s
+  else Result := REsult+Copy(s, j, length(s)-j+1);
+end;
+
 procedure TBatSyntax.LineToArgs(const buf: string; args: TStrings;
   var err: TSyntaxError);
 var
   i : integer;
   j : integer;
+  b : string;
 begin
   i:=1;
   while i<=length(buf) do begin
     if buf[i] in ['"'] then begin
       inc(i);
       j := i;
-      while (i<=length(buf)) and (not (buf[i] in ['"'])) do begin
-        if (buf[i] = '\') and (i<length(buf)) and (buf[i+1] = '"') then
-          inc(i);
+      while (i<=length(buf)) and (not (buf[i] in ['"'])) do
         inc(i);
-      end;
       args.Add( copy(buf, j, i-j) );
       inc(i);
     end else if not (buf[i] in [#9,#32]) then begin
       j := i;
       while (i<=length(buf)) and not (buf[i] in [#9,#32]) do
         inc(i);
-      args.Add( copy(buf, j, i-j) );
+      b := copy(buf, j, i-j);
+      b := WindowsUnescape(b);
+      args.Add(b);
     end else
       inc(i);
   end;
