@@ -58,7 +58,7 @@ type
     function IsCaseSensitive: Boolean; virtual;
     // breaks out the line into the list of arguments.
     // the input line doesn't contain any variables.
-    procedure LineToArgs(const ln: string; dst: TStrings; var err: TSyntaxError); virtual;
+    procedure LineToArgs(const ln: string; dst: TStrings; var idx: Integer; var err: TSyntaxError); virtual;
 
     function PathsToScriptNative(const pth: string): string; virtual;
   end;
@@ -112,7 +112,7 @@ type
     function MultiLineChar: char; override;
     function ParseTemplateLine(const buf: string; var err: TSyntaxError): TTemplateLine; override;
     function IsCaseSensitive: Boolean; override;
-    procedure LineToArgs(const buf: string; args: TStrings; var err: TSyntaxError); override;
+    procedure LineToArgs(const buf: string; args: TStrings; var idx: integer; var err: TSyntaxError); override;
     function PathsToScriptNative(const pth: string): string; override;
   end;
 
@@ -123,7 +123,7 @@ type
     function MultiLineChar: char; override;
     function ParseTemplateLine(const buf: string; var err: TSyntaxError): TTemplateLine; override;
     function IsCaseSensitive: Boolean; override;
-    procedure LineToArgs(const buf: string; args: TStrings; var err: TSyntaxError); override;
+    procedure LineToArgs(const buf: string; args: TStrings; var idx: Integer; var err: TSyntaxError); override;
     function PathsToScriptNative(const pth: string): string; override;
   end;
 
@@ -323,6 +323,7 @@ begin
 end;
 
 procedure TShSyntax.LineToArgs(const buf: string; args: TStrings;
+  var idx: Integer;
   var err: TSyntaxError);
 var
   i : integer;
@@ -348,6 +349,7 @@ begin
     end else
       inc(i);
   end;
+  idx := i;
   for i:=0 to args.Count-1 do
     args[i]:=UnixUnescape(args[i]);
 end;
@@ -482,6 +484,7 @@ begin
 end;
 
 procedure TBatSyntax.LineToArgs(const buf: string; args: TStrings;
+  var idx: Integer;
   var err: TSyntaxError);
 var
   i : integer;
@@ -507,6 +510,7 @@ begin
     end else
       inc(i);
   end;
+  idx := i;
 end;
 
 function TBatSyntax.PathsToScriptNative(const pth: string): string;
@@ -537,7 +541,7 @@ begin
 end;
 
 procedure TScriptSyntax.LineToArgs(const ln: string; dst: TStrings;
-  var err: TSyntaxError);
+  var idx: Integer; var err: TSyntaxError);
 begin
 
 end;
@@ -593,7 +597,12 @@ begin
 
   err.err := '';
   err.pos := 0;
-  syntax.LineToArgs(buf, args, err);
+  i := 1;
+  while i<= length(buf) do begin
+    syntax.LineToArgs(buf, args, i, err);
+    if args.Count = 0 then
+      Break;
+  end;
 
   if (args.Count>0) then begin
     rawcmd := args[0];
