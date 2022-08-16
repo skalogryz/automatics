@@ -70,6 +70,7 @@ type
     LastStdOutFn  : string;
     LastStdErrFn  : string;
 
+    ToEnv         : TStringList;
     CurTimeOut    : Integer;
     DefTimeOut    : Integer; // the default timeout.
     CurDir        : string;
@@ -417,33 +418,44 @@ begin
   CurCmd := c;
   Result.cmd := c;
   try
-    if (c.cmd = pcCd) then begin
-      ran := c.args.Count>1;
-      if not ran then begin
-        ErrorMsg(InvalidParams);
+    case c.cmd of
+      pcCd: begin
+        ran := c.args.Count>1;
+        if not ran then begin
+          ErrorMsg(InvalidParams);
+        end;
+        CurDir := SlashToNative(c.args[0]);
       end;
-      CurDir := SlashToNative(c.args[0]);
-    end else if (c.cmdlow = CMD_FAILMSG) then begin
-      failMessage := ArgsToOneLine(c.args);
-    end else if (c.cmd = pcEcho) then begin
-      EchoMsg(ArgsToOneLine(c.args));
-    end else if (c.cmdlow = CMD_TIMEOUT) then begin
-      if not GetTimeOutMs(ArgsToOneLine(c.args), CurTimeOut) then begin
-        Log('Invalid time out line: ' + ArgsToOneLine(c.args)+', defaulting');
-        CurTimeOut := DefTimeOut;
+      pcEcho:
+        EchoMsg(ArgsToOneLine(c.args));
+      pcSetVar, pcSetVarEnv: begin
+        if (c.args.Count>0) then
+           Params.Values[c.varname] := c.args[0];
+        if (c.cmd = pcSetVarEnv) then ToEnv.Add(c.varname);
       end;
-      Log('Time out is: '+IntToStr(CurTimeOut));
-    end else if (c.cmdlow = CMD_EXPECT) then begin
-      ExecExpect(c, result);
-    end else if (c.cmd = pcExec) then begin
-      LastExitCode := 0;
-      if ExecProcess(c, result, true) then begin
-        LastExitCode := result.procRes.exitCode;
-        LastStdOutFn := result.procRes.stdOutFn;
-        LastStdErrFn := result.procRes.stdErrFn;
+      pcEnv:
+        ToEnv.Add(c.varname);
+      pcExec: begin
+        if (c.cmdlow = CMD_FAILMSG) then begin
+          failMessage := ArgsToOneLine(c.args);
+        end else if (c.cmdlow = CMD_TIMEOUT) then begin
+          if not GetTimeOutMs(ArgsToOneLine(c.args), CurTimeOut) then begin
+            Log('Invalid time out line: ' + ArgsToOneLine(c.args)+', defaulting');
+            CurTimeOut := DefTimeOut;
+          end;
+          Log('Time out is: '+IntToStr(CurTimeOut));
+        end else if (c.cmdlow = CMD_EXPECT) then begin
+          ExecExpect(c, result);
+        end else begin
+          LastExitCode := 0;
+          if ExecProcess(c, result, true) then begin
+            LastExitCode := result.procRes.exitCode;
+            LastStdOutFn := result.procRes.stdOutFn;
+            LastStdErrFn := result.procRes.stdErrFn;
+          end;
+        end;
       end;
-    end else
-      ran := false;
+    end;
   finally
     CurCmd := nil;
     CurRes := nil;
@@ -476,19 +488,12 @@ end;
 function TPlainSyntaxExec.CopyCmd(src: TPlainCommand): TPlainCommand;
 var
   c : TPlainCommand;
-  i : integer;
 begin
   c := TPlainCommand.Create;
   c.syntax := src.syntax;
   c.lineNum := src.lineNum;
   c.lines.Assign(src.lines);
-
   c.ParseCommand(Params);
-  UpdateCommandAlias(c);
-  //c.cmd := ReplaceParams(c.cmd, Params);
-  c.cmd := src.cmd;
-  for i:=0 to c.args.Count-1 do
-    c.args[i] := ReplaceParams(c.args[i], Params);
   Result := c;
 end;
 
@@ -499,7 +504,8 @@ begin
   CurTimeOut := -1;
   CurDir := GetCurrentDir;
   DefaultResult := trUnableToRun;
-
+  ToEnv := TStringList.Create;
+  ToEnv.Duplicates := dupIgnore;
   CommandLogs := TList.Create; // array of TCommandExecResult
   Params := TStringList.Create;
 end;
@@ -512,6 +518,7 @@ begin
   for i:=0 to CommandLogs.Count-1 do
     TObject(CommandLogs[i]).Free;
   CommandLogs.Free;
+  ToEnv.Free;
   inherited Destroy;
 end;
 
