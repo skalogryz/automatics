@@ -617,7 +617,7 @@ begin
     commands.Add(curcmd);
   end;
   curcmd.lines.Add(s);
-  if (s <> '') and (s[length(s)] = '\') then
+  if (s <> '') and (s[length(s)] = syntax.MultiLineChar) then
     // multiline
   else
     curcmd := nil;
