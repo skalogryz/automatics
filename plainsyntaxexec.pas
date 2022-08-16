@@ -417,22 +417,24 @@ begin
   CurCmd := c;
   Result.cmd := c;
   try
-    if (c.cmd = pcCD) then begin
+    if (c.cmd = pcCd) then begin
       ran := c.args.Count>1;
       if not ran then begin
         ErrorMsg(InvalidParams);
       end;
       CurDir := SlashToNative(c.args[0]);
-    end else if (c.cmd = pcFailMsg) then begin
+    end else if (c.cmdlow = CMD_FAILMSG) then begin
       failMessage := ArgsToOneLine(c.args);
-    end else if (c.cmd = pcTimeout) then begin
+    end else if (c.cmd = pcEcho) then begin
+      EchoMsg(ArgsToOneLine(c.args));
+    end else if (c.cmdlow = CMD_TIMEOUT) then begin
       if not GetTimeOutMs(ArgsToOneLine(c.args), CurTimeOut) then begin
         Log('Invalid time out line: ' + ArgsToOneLine(c.args)+', defaulting');
         CurTimeOut := DefTimeOut;
       end;
       Log('Time out is: '+IntToStr(CurTimeOut));
-    end else if (c.cmd = pcEcho) then begin
-      EchoMsg(ArgsToOneLine(c.args));
+    end else if (c.cmdlow = CMD_EXPECT) then begin
+      ExecExpect(c, result);
     end else if (c.cmd = pcExec) then begin
       LastExitCode := 0;
       if ExecProcess(c, result, true) then begin
@@ -440,8 +442,6 @@ begin
         LastStdOutFn := result.procRes.stdOutFn;
         LastStdErrFn := result.procRes.stdErrFn;
       end;
-    end else if (c.cmd = pcExpect) then begin
-      ExecExpect(c, result);
     end else
       ran := false;
   finally

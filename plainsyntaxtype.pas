@@ -21,9 +21,9 @@ type
 
    // test specific :(.. it would be nice to keep them as "pcExt" and
    //                    have them recorded elsewher
-   ,pcFailMsg
-   ,pcTimeout
-   ,pcExpect
+   //,pcFailMsg
+   //,pcTimeout
+   //,pcExpect
   );
 
   TPlainCmdOpts = set of(
@@ -37,8 +37,8 @@ type
     syntax  : TScriptSyntax;
     lines   : TStringList;
     cmd     : TPlainCmd;
+    cmdlow  : string;
     cmdopts : TPlainCmdOpts;
-    rawcmd  : string;
     args    : TStringList;
     varname : string;  // use for
     lineNum : Integer; // line number in the file
@@ -140,9 +140,9 @@ const
    ,'cd'
    ,'none'
    // test specific
-   ,'failmsg'
-   ,'timeout'
-   ,'expect'
+   // ,'failmsg'
+   // ,'timeout'
+   // ,'expect'
   );
 
 function GetTimeOutMs(const ts: string; out ms: Integer): Boolean;
@@ -667,7 +667,6 @@ var
 begin
   args.Clear;
   cmd := pcExec;
-  rawcmd := '';
   if lines.Count=0 then Exit;
 
   buf := '';
@@ -687,17 +686,16 @@ begin
   err.err := '';
   err.pos := 0;
   i := 1;
-  while i<= length(buf) do begin
+  syntax.ParseComamnd(buf, Self, i, err);
+
+  if (cmd = pcExec) and (args.Count > 0) then
+    cmdlow := AnsiLowerCase(args[0]);
+  {while i<= length(buf) do begin
     syntax.LineToArgs(buf, args, i, err);
     if args.Count = 0 then
       Break;
   end;
-
-  if (args.Count>0) then begin
-    rawcmd := args[0];
-    args.Delete(0);
-    //cmd := AnsiLowerCase(rawcmd);
-  end;
+  }
 end;
 
 { TPlainParser }
