@@ -598,7 +598,8 @@ begin
   if (lineCount=0) then begin
     if (ins = '#!/bin/bash') then
       syntax := shSyntax
-    else if (ins = '#batch') or (ins = '#bat') then
+    else if (ins = '#!/bin/bat') or (ins = '#!/bin/batch')
+      or (ins = '#batch') or (ins = '#bat') then
       syntax := batSyntax;
   end;
 
