@@ -5,19 +5,42 @@ unit plainsyntaxtype;
 interface
 
 uses
-  Classes, SysUtils, ExtraFileUtils;
+  Classes, SysUtils, ExtraFileUtils, batchparser, parseutils;
 
 type
   TScriptSyntax = class;
 
+  TPlainCmd = (
+    pcExec       // execute anything
+   ,pcSetVar     // set variable
+   ,pcSetVarEnv  // set variable and make it environmental variable
+   ,pcEnv        // set variable to be environmental variable
+   ,pcEcho       // echo
+   ,pcCd         // change directory
+   ,pcNone       // a placeholder for not supported functionality
+
+   // test specific :(.. it would be nice to keep them as "pcExt" and
+   //                    have them recorded elsewher
+   ,pcFailMsg
+   ,pcTimeout
+   ,pcExpect
+  );
+
+  TPlainCmdOpts = set of(
+    pcoMath  // mathematical expression
+   ,pcoNoEcho // @ commant for win batch
+  );
+
   { TPlainCommand }
 
   TPlainCommand = class(TObject)
-    syntax : TScriptSyntax;
-    lines  : TStringList;
-    cmd    : string; // lower case of rawcmd
-    rawcmd : string;
-    args   : TStringList;
+    syntax  : TScriptSyntax;
+    lines   : TStringList;
+    cmd     : TPlainCmd;
+    cmdopts : TPlainCmdOpts;
+    rawcmd  : string;
+    args    : TStringList;
+    varname : string;  // use for
     lineNum : Integer; // line number in the file
     constructor Create;
     destructor Destroy; override;
@@ -56,6 +79,9 @@ type
     function MultiLineChar: char; virtual;
     function ParseTemplateLine(const ln: string; var err: TSyntaxError): TTemplateLine; virtual;
     function IsCaseSensitive: Boolean; virtual;
+
+    function ParseComamnd(const ln: string; dst : TPlainCommand; var idx: integer; var err: TSyntaxError): Boolean; virtual;
+
     // breaks out the line into the list of arguments.
     // the input line doesn't contain any variables.
     procedure LineToArgs(const ln: string; dst: TStrings; var idx: Integer; var err: TSyntaxError); virtual;
@@ -80,7 +106,6 @@ type
 function ReadPlainCommandFile(const fn: string): TList;
 
 function UnixUnescape(const s : string): string;
-function WindowsUnescape(const s : string): string;
 
 // converting TStrings to a single string
 function ArgsToOneLine(s : TStrings): string;
@@ -102,6 +127,24 @@ const
 
   CMD_STORE   = 'store'; // probe,
 
+  CMD_SYNTAXSET  = '#SET';
+  CMD_SYNTAXEXPORT = '#EXPORT';
+  CMD_SYNTAXSETEXPORT = '#SETEXPORT';
+
+  PlainCmdStr : array [TPlainCmd] of string = (
+    'exec'       // execute anything
+   ,'setVar'     // set variable
+   ,'setVarEnv'  // set variable and make it environmental variable
+   ,'env'        // set variable to be environmental variable
+   ,'echo'       // echo
+   ,'cd'
+   ,'none'
+   // test specific
+   ,'failmsg'
+   ,'timeout'
+   ,'expect'
+  );
+
 function GetTimeOutMs(const ts: string; out ms: Integer): Boolean;
 
 type
@@ -114,6 +157,7 @@ type
     function IsCaseSensitive: Boolean; override;
     procedure LineToArgs(const buf: string; args: TStrings; var idx: integer; var err: TSyntaxError); override;
     function PathsToScriptNative(const pth: string): string; override;
+    function ParseComamnd(const ln: string; dst : TPlainCommand; var idx: integer; var err: TSyntaxError): Boolean; override;
   end;
 
   { TShSyntax }
@@ -125,6 +169,7 @@ type
     function IsCaseSensitive: Boolean; override;
     procedure LineToArgs(const buf: string; args: TStrings; var idx: Integer; var err: TSyntaxError); override;
     function PathsToScriptNative(const pth: string): string; override;
+    function ParseComamnd(const ln: string; dst : TPlainCommand; var idx: integer; var err: TSyntaxError): Boolean; override;
   end;
 
 var
@@ -359,6 +404,12 @@ begin
   Result:=SlashToUnix(pth);
 end;
 
+function TShSyntax.ParseComamnd(const ln: string; dst: TPlainCommand;
+  var idx: integer; var err: TSyntaxError): Boolean;
+begin
+  Result:=inherited ParseComamnd(ln, dst, idx, err);
+end;
+
 { TBatSyntax }
 
 function TBatSyntax.IsComment(const s: string): boolean;
@@ -457,35 +508,8 @@ begin
   Result := false;
 end;
 
-// presumably the %% has alredy been replaced with %
-// thus no replacing here
-function WindowsUnescape(const s : string): string;
-var
-  i : integer;
-  j : integer;
-begin
-  Result := '';
-  i := 1;
-  j := 1;
-  while i <= length(s) do begin
-    if s[i]='^' then begin
-      Result := Result+Copy(s, j, i-j);
-      inc(i);
-      if (i<=length(s)) then begin
-        Result:=Result+s[i];
-        inc(i);
-      end;
-      j := i;
-    end;
-    inc(i);
-  end;
-  if Result = '' then Result :=s
-  else Result := REsult+Copy(s, j, length(s)-j+1);
-end;
-
 procedure TBatSyntax.LineToArgs(const buf: string; args: TStrings;
-  var idx: Integer;
-  var err: TSyntaxError);
+  var idx: integer; var err: TSyntaxError);
 var
   i : integer;
   j : integer;
@@ -518,6 +542,65 @@ begin
   Result:=SlashToWindows(pth);
 end;
 
+function TBatSyntax.ParseComamnd(const ln: string; dst: TPlainCommand;
+  var idx: integer; var err: TSyntaxError): Boolean;
+var
+  id: string;
+  lw : string;
+  t  : string;
+  n,o,v : string;
+  eq:Boolean;
+begin
+  if not Assigned(dst) then begin
+    Result:=false;
+    Exit;
+  end;
+
+  SkipWhile(ln, idx, WhiteSpaceChars);
+  if (idx>length(ln)) then begin
+    Result := false;
+    Exit;
+  end;
+  Result := true;
+  if (ln[idx] = '@') then begin
+    inc(idx);
+    dst.cmdopts:=dst.cmdopts+[pcoNoEcho];
+    SkipWhile(ln, idx, WhiteSpaceChars);
+  end;
+  id := StrWhile(ln, idx, AlphaNumUnderChars);
+  lw := LowerCase(id);
+  if lw = 'echo' then begin
+    dst.cmd := pcEcho;
+    inc(idx);
+    dst.args.Add(Copy(ln, idx, length(ln)));
+    idx := length(ln)+1;
+  end else if (lw = 'set') then begin
+    inc(idx);
+    ParseSet(ln, idx, n,o,v, eq);
+    if not eq then begin
+      dst.cmd := pcNone;
+      Exit;
+    end;
+    dst.cmd := pcSetVarEnv;
+    dst.varname := n;
+    dst.args.Add(v);
+    if o<>'' then begin
+      err.err :='set options are not supported';
+      err.pos := 1;
+      Result := false;
+      exit;
+    end;
+  end else if (lw = 'cd') then begin
+    dst.cmd:= pcCd;
+    ParseCd(ln, idx, o, v);
+    dst.args.Add(v);
+  end else begin
+    dst.cmd := pcExec;
+    dst.Args.Add(id);
+    LineToArgs(ln,dst.Args,idx,err);
+  end;
+end;
+
 { TScriptSyntax }
 
 function TScriptSyntax.IsComment(const s: string): boolean;
@@ -536,6 +619,12 @@ begin
 end;
 
 function TScriptSyntax.IsCaseSensitive: Boolean;
+begin
+  Result := false;
+end;
+
+function TScriptSyntax.ParseComamnd(const ln: string; dst: TPlainCommand;
+  var idx: integer; var err: TSyntaxError): Boolean;
 begin
   Result := false;
 end;
@@ -577,7 +666,7 @@ var
   err : TSyntaxError;
 begin
   args.Clear;
-  cmd := '';
+  cmd := pcExec;
   rawcmd := '';
   if lines.Count=0 then Exit;
 
@@ -607,7 +696,7 @@ begin
   if (args.Count>0) then begin
     rawcmd := args[0];
     args.Delete(0);
-    cmd := AnsiLowerCase(rawcmd);
+    //cmd := AnsiLowerCase(rawcmd);
   end;
 end;
 
@@ -714,10 +803,12 @@ end;
 
 procedure UpdateCommandAlias(c: TPlainCommand);
 begin
+  {
   if (c.cmd = CMD_EXPECT)
     or (c.cmd = CMD_ASSES)
     or (c.cmd = CMD_ASSERT) then
     c.cmd := CMD_EXPECT;
+    }
 end;
 
 function GetTimeOutMs(const ts: string; out ms: Integer): Boolean;

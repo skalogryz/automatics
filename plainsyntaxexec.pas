@@ -8,7 +8,7 @@ uses
   {$ifdef mswindows}
   // this is only for error messages
   Windows,
-  {$$endif}
+  {$endif}
   Classes, SysUtils,
   fpexprpars, ExtraFileUtils,
   runproctypes, plainsyntaxtype, runtesttypes;
@@ -183,8 +183,8 @@ procedure TPlainSyntaxExecStdErrEnv.StartCommand(const rawCmd,
 var
   i : integer;
 begin
-  if finalCmd.cmd='echo' then Exit;
-  DoLog('---- Executing command: ' + finalCmd.cmd+' ---- ');
+  if finalCmd.cmd=pcEcho then Exit;
+  DoLog('---- Executing command: ' + PlainCmdStr[finalCmd.cmd]+' ---- ');
   if finalCmd.args.Count>0 then
     DoLog('Arguments: ');
   for i:=0 to finalCmd.args.Count-1 do
@@ -197,7 +197,7 @@ end;
 procedure TPlainSyntaxExecStdErrEnv.CommandFinished(rawCmd: TPlainCommand;
   res: TCommandExecResult);
 begin
-  if res.cmd.cmd ='echo' then Exit;
+  if res.cmd.cmd = pcEcho then Exit;
   DoLog('---- Command Finished -----');
 end;
 
@@ -320,7 +320,7 @@ end;
 function GetSystemMessageProcFail(code: integer): string;
 begin
   Result := 'err code: '+IntToStr(code);
-  {$ifef mswindows}
+  {$ifdef mswindows}
   case code of
     0: Result := ''; // all is well
     ERROR_FILE_NOT_FOUND: Result := 'File not found. ('+Result+')';
@@ -417,30 +417,30 @@ begin
   CurCmd := c;
   Result.cmd := c;
   try
-    if (c.cmd = CMD_CD) then begin
+    if (c.cmd = pcCD) then begin
       ran := c.args.Count>1;
       if not ran then begin
         ErrorMsg(InvalidParams);
       end;
       CurDir := SlashToNative(c.args[0]);
-    end else if (c.cmd = CMD_FAILMSG) then begin
+    end else if (c.cmd = pcFailMsg) then begin
       failMessage := ArgsToOneLine(c.args);
-    end else if (c.cmd = CMD_TIMEOUT) then begin
+    end else if (c.cmd = pcTimeout) then begin
       if not GetTimeOutMs(ArgsToOneLine(c.args), CurTimeOut) then begin
         Log('Invalid time out line: ' + ArgsToOneLine(c.args)+', defaulting');
         CurTimeOut := DefTimeOut;
       end;
       Log('Time out is: '+IntToStr(CurTimeOut));
-    end else if (c.cmd = CMD_ECHO) then begin
+    end else if (c.cmd = pcEcho) then begin
       EchoMsg(ArgsToOneLine(c.args));
-    end else if (c.cmd = CMD_RUN) then begin
+    end else if (c.cmd = pcExec) then begin
       LastExitCode := 0;
       if ExecProcess(c, result, true) then begin
         LastExitCode := result.procRes.exitCode;
         LastStdOutFn := result.procRes.stdOutFn;
         LastStdErrFn := result.procRes.stdErrFn;
       end;
-    end else if (c.cmd = CMD_EXPECT) then begin
+    end else if (c.cmd = pcExpect) then begin
       ExecExpect(c, result);
     end else
       ran := false;
@@ -485,7 +485,8 @@ begin
 
   c.ParseCommand(Params);
   UpdateCommandAlias(c);
-  c.cmd := ReplaceParams(c.cmd, Params);
+  //c.cmd := ReplaceParams(c.cmd, Params);
+  c.cmd := src.cmd;
   for i:=0 to c.args.Count-1 do
     c.args[i] := ReplaceParams(c.args[i], Params);
   Result := c;
