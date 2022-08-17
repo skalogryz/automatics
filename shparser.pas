@@ -9,7 +9,60 @@ uses
 
 function UnixUnescape(const s : string): string;
 
+// reads either value or quoted string
+function ScanBashValue(const s: string; var idx: integer): string;
+// DblQuote allow \"
+function ScanDblQuoteStr(const s: string; var idx: integer): string;
+// SingleQuote doesn't allow \'
+function ScanSingleQuoteStr(const s: string; var idx: integer): string;
+
 implementation
+
+function ScanBashValue(const s: string; var idx: integer): string;
+begin
+  if (idx>length(s)) then Result:=''
+  else if s[idx]='"' then
+    Result := ScanDblQuoteStr(s, idx)
+  else if s[idx]=#39 then
+    Result := ScanSingleQuoteStr(s, idx)
+  else
+    Result := StrTo(s, idx, WhiteSpaceChars+[';']);
+end;
+
+function ScanDblQuoteStr(const s: string; var idx: integer): string;
+var
+  j: integer;
+begin
+  if (idx>length(s)) or (s[idx]<>'"') then begin
+    Result:='';
+    exit;
+  end;
+  inc(idx);
+  j := idx;
+  while true do begin
+    SkipTo(s, idx, ['"']);
+    if (idx > length(s)) or ((idx <= length(s)) and (s[idx-1]<>'\')) then
+      Break;
+    inc(idx);
+  end;
+  Result := UnixUnescape(Copy(s, j, idx-j));
+  inc(idx);
+end;
+
+function ScanSingleQuoteStr(const s: string; var idx: integer): string;
+var
+  j: integer;
+begin
+  if (idx>length(s)) or (s[idx]<>#39) then begin
+    Result:='';
+    exit;
+  end;
+  inc(idx);
+  j := idx;
+  Result := StrTo(s, idx, [#39]);
+  inc(idx);
+  Result := UnixUnescape(Result);
+end;
 
 function UnixUnescape(const s : string): string;
 var
@@ -28,6 +81,7 @@ begin
         't': Result := Result+#9;
         'r': Result := Result + #10;
         'n': Result := Result + #13;
+        '"': result := Result + '"';
       else
         Result := Result + s[i];
       end;

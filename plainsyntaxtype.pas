@@ -373,8 +373,66 @@ end;
 
 function TShSyntax.ParseComamnd(const ln: string; dst: TPlainCommand;
   var idx: integer; var err: TSyntaxError): Boolean;
+var
+  f : string;
+  i : integer;
+  isExport : Boolean;
+  pr : string;
 begin
-  Result:=inherited ParseComamnd(ln, dst, idx, err);
+  Result := Assigned(dst);
+  if not Result then Exit;
+  i := 1;
+  SkipWhile(ln, i, WhiteSpaceChars);
+  if (i > length(ln)) then Exit;
+
+  isExport := false;
+  pr := StrWhile(ln, i, AlphaNumUnderChars);
+  if pr = 'echo' then begin
+    idx := i;
+    dst.cmd := pcEcho;
+    pr := '';
+    while idx<=length(ln) do begin
+      pr := pr + StrWhile(ln, idx, WhiteSpaceChars);
+      if (idx <= length(ln)) then
+        pr := pr + ScanBashValue(ln, idx);
+    end;
+    dst.Args.Add(pr);
+    Exit;
+  end;
+
+
+  if (pr = 'export') then begin
+    isExport := true;
+    inc(i);
+    SkipWhile(ln, i, WhiteSpaceChars);
+    pr := StrWhile(ln, i, AlphaNumUnderChars);
+  end;
+
+  if ((i<=length(ln)) and (ln[i]='=')) then begin
+    if isExport then
+      dst.cmd := pcSetVarEnv
+    else
+      dst.cmd := pcSetVar;
+    inc(i);
+    dst.varname := pr;
+    dst.args.Add( ScanBashValue(ln, i));
+    idx := i;
+  end else if (isExport) and (pr <> '') then begin
+    dst.cmd := pcEnv;
+    dst.varname := pr;
+    idx := i;
+  end else begin
+    LineToArgs(ln, dst.args, idx, err);
+    if (dst.Args.Count>0) then begin
+      pr := dst.Args[0];
+      if (pr = 'cd') then begin
+        dst.cmd := pcCd;
+        dst.Args.Delete(0);
+      end else begin
+        dst.cmd := pcExec;
+      end;
+    end;
+  end;
 end;
 
 { TBatSyntax }
