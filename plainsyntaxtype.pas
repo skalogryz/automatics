@@ -5,7 +5,7 @@ unit plainsyntaxtype;
 interface
 
 uses
-  Classes, SysUtils, ExtraFileUtils, batchparser, parseutils;
+  Classes, SysUtils, ExtraFileUtils, batchparser, shparser, parseutils;
 
 type
   TScriptSyntax = class;
@@ -105,8 +105,6 @@ type
 
 function ReadPlainCommandFile(const fn: string): TList;
 
-function UnixUnescape(const s : string): string;
-
 // converting TStrings to a single string
 function ArgsToOneLine(s : TStrings): string;
 
@@ -195,37 +193,6 @@ begin
   j:=i;
   while (i<=length(s)) and not (s[i] in [#32,#9]) do inc(i);
   Result := Copy(s, j, i-j);
-end;
-
-function UnixUnescape(const s : string): string;
-var
-  i : integer;
-  j : integer;
-begin
-  Result := '';
-  if s = '' then Exit;
-  j:=1;
-  i := 1;
-  while i <= length(s) do begin
-    if s[i]= '\' then begin // need escape
-      Result := Result + Copy(s, j, i-j);
-      inc(i);
-      case s[i] of
-        't': Result := Result+#9;
-        'r': Result := Result + #10;
-        'n': Result := Result + #13;
-      else
-        Result := Result + s[i];
-      end;
-      inc(i);
-      j:=i;
-    end else
-      inc(i);
-  end;
-  if (Result = '') then
-    Result := s
-  else
-    Result := Result + Copy(s, j, length(s)-j+1);
 end;
 
 { TTemplateLine }
