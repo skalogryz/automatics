@@ -388,7 +388,7 @@ begin
   isExport := false;
   pr := StrWhile(ln, i, AlphaNumUnderChars);
   if pr = 'echo' then begin
-    idx := i;
+    idx := i+1;
     dst.cmd := pcEcho;
     pr := '';
     while idx<=length(ln) do begin
