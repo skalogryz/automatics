@@ -387,19 +387,6 @@ begin
 
   isExport := false;
   pr := StrWhile(ln, i, AlphaNumUnderChars);
-  if pr = 'echo' then begin
-    idx := i+1;
-    dst.cmd := pcEcho;
-    pr := '';
-    while idx<=length(ln) do begin
-      pr := pr + StrWhile(ln, idx, WhiteSpaceChars);
-      if (idx <= length(ln)) then
-        pr := pr + ScanBashValue(ln, idx);
-    end;
-    dst.Args.Add(pr);
-    Exit;
-  end;
-
 
   if (pr = 'export') then begin
     isExport := true;
@@ -425,7 +412,10 @@ begin
     LineToArgs(ln, dst.args, idx, err);
     if (dst.Args.Count>0) then begin
       pr := dst.Args[0];
-      if (pr = 'cd') then begin
+      if (pr = 'echo') then begin
+        dst.cmd := pcEcho;
+        dst.Args.Delete(0);
+      end else if (pr = 'cd') then begin
         dst.cmd := pcCd;
         dst.Args.Delete(0);
       end else begin
