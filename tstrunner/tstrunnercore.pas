@@ -16,6 +16,8 @@ type
   TTestInput = record
     subject   : string;    // subject test file (the executable)
     maxPara   : Integer;   // maximum parallel executions
+    tempDir   : string;    // the directory used to store all the results
+                           // it's an optional parameter that can be empty
   end;
 
   { TFileRunInfo }
@@ -29,6 +31,8 @@ type
     exec     : TPlainSyntaxExec;
     execThr  : TThread;
     done     : Boolean;
+
+    tempDir  : string; // target temporary dir to store results. It can be empty
     destructor Destroy; override;
     function IsRunning: Boolean;
     function GetTestResult: TTestResult;
@@ -47,6 +51,7 @@ type
     fileExt     : TStringList;
     maxPara     : integer;
     subject     : string;
+    ftempdir    : string;
 
   protected
     procedure ControlThreadProc;
@@ -63,6 +68,7 @@ type
     function IsDone: Boolean;
     procedure Abort;
     function GetResults(dst: TStrings): Boolean;
+    property tempDir   : string read ftempDir;
   end;
 
 procedure PerformTests(Target: TStringList; const inp : TTestInput; result: TStrings);
@@ -70,6 +76,11 @@ procedure InitTestInput(out inp: TTestInput);
 
 const
   DEFAULT_PARALLEL = 8; // in fact is should 100500
+
+function NewGuidStr: string;
+
+const
+  DelegateLogFileName = 'log.txt';
 
 implementation
 
@@ -84,6 +95,18 @@ type
   public
     constructor Create(performer: TTestPerformer);
   end;
+
+function NewGuidStr: string;
+var
+  nm : string;
+  g : Tguid;
+begin
+  CreateGUID(g);
+  nm := GUIDToString(g);
+  if (nm<>'') and (nm[1]='{') then
+    nm := Copy(nm, 2, length(nm)-2);
+  Result := nm;
+end;
 
 procedure PerformTests(Target: TStringList; const inp : TTestInput; result: TStrings);
 var
@@ -134,6 +157,9 @@ type
   { TFileInfoDelegate }
 
   TFileInfoDelegate = class(TPlainSyntaxExecEnv)
+  protected
+    logfn : string;
+    procedure DoLog(const pfx, msg: string);
   public
     finfo : TfileRunInfo;
     constructor Create(Ainfo: TfileRunInfo);
@@ -147,6 +173,37 @@ type
 
 { TFileInfoDelegate }
 
+procedure TFileInfoDelegate.DoLog(const pfx, msg: string);
+var
+  f : Text;
+begin
+  try
+    if (finfo.tempDir = '') then begin
+      if pfx='' then
+        Verbose(msg)
+      else
+        Verbose('%s: %s',[pfx, msg]);
+      Exit;
+    end;
+
+    if (logfn = '') then begin
+      ForceDirectories(finfo.tempDir);
+      logfn := IncludeTrailingPathDelimiter(finfo.tempDir)+DelegateLogFileName;
+      AssignFile(f, logfn); Rewrite(f);
+      CLoseFile(f);
+    end;
+    AssignFile(f, logfn); Append(f);
+    try
+      write(f, FormatDateTime('hh:nn:ss:zzz',now),' [',GetCurrentThreadId,']: ');
+      if pfx <> '' then write(f, pfx,': ');
+      writeln(f, msg);
+    finally
+      CloseFile(f);
+    end;
+  except
+  end;
+end;
+
 constructor TFileInfoDelegate.Create(Ainfo: TfileRunInfo);
 begin
   inherited Create;
@@ -155,28 +212,28 @@ end;
 
 procedure TFileInfoDelegate.StartCommand(const rawCmd, finalCmd: TPlainCommand);
 begin
-  Verbose('  run command: '+ DisplayCommand(finalCmd));
+  DoLog('run command: ', DisplayCommand(finalCmd));
 end;
 
 procedure TFileInfoDelegate.CommandFinished(rawCmd: TPlainCommand;
   res: TCommandExecResult);
 begin
-  Verbose('  end command: '+ DisplayCommand(res.cmd));
+  DoLog('end command: ', DisplayCommand(res.cmd));
 end;
 
 procedure TFileInfoDelegate.EchoMsg(const msg: string; cmd: TPlainCommand);
 begin
-  Verbose('  ECHO: '+msg);
+  DoLog('  ECHO: ', msg);
 end;
 
 procedure TFileInfoDelegate.ErrorMsg(const msg: string; cmd: TPlainCommand);
 begin
-  Verbose('  CMD ERROR: '+msg);
+  DoLog('  CMD ERROR: ', msg);
 end;
 
 procedure TFileInfoDelegate.LogMsg(const msg: string; cmd: TPlainCommand);
 begin
-  Verbose('  CMD LOG: '+msg);
+  DoLog('  CMD LOG: ', msg);
 end;
 
 function TFileInfoDelegate.DisplayCommand(cmd: TPlainCommand): string;
@@ -233,7 +290,7 @@ begin
   done := false;
   fn := scriptFn;
   exec := TPlainSyntaxExec.Create;
-  exec.Delegate := TFileInfoDelegate.Create(SElf);
+  exec.Delegate := TFileInfoDelegate.Create(Self);
   delegate := exec.Delegate;
   exec.Params.Values['subject']:=subjecTfile;
   exec.Params.Values['subj']:=subjecTfile;
@@ -355,6 +412,12 @@ begin
       if info <> nil then continue;
 
       info := TFileRunInfo.Create;
+
+      if ftempDir<>'' then begin
+        info.tempDir := IncludeTrailingPathDelimiter(ftempDir)+ExtractFileName(filesToTest[i]);
+        ForceDirectories(info.tempDir);
+      end;
+
       info.Start(filesToTest[i], subject);
       filesToTest.Objects[i] := info;
       inc(used);
@@ -414,6 +477,10 @@ begin
   cancel := false;
   maxPara := inp.maxPara;
   subject := inp.subject;
+  ftempDir := inp.tempDir;
+  if (ftempDir = '') then
+    ftempDir := IncludeTrailingPathDelimiter(GetTempDir(false))+NewGuidStr;
+
   if (maxPara <= 0) then maxPara := DEFAULT_PARALLEL;
 
   for i:=0 to Target.Count-1 do begin
