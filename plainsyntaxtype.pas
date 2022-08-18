@@ -9,6 +9,8 @@ uses
 
 type
   TScriptSyntax = class;
+  TScriptSyntaxClass = class of TScriptSyntax;
+  TTemplateLine = class;
 
   TPlainCmd = (
     pcExec       // execute anything
@@ -34,8 +36,8 @@ type
   { TPlainCommand }
 
   TPlainCommand = class(TObject)
-    syntax  : TScriptSyntax;
-    lines   : TStringList;
+    syntax  : TScriptSyntaxClass;
+    tmp     : TTemplateLine;
     cmd     : TPlainCmd;
     cmdlow  : string;
     cmdopts : TPlainCmdOpts;
@@ -71,22 +73,28 @@ type
     pos : integer;
   end;
 
+
+  TScriptSyntaxResult = (srError, srTemplateAvail, srNeedMoreLines, srComment);
+
   { TScriptSyntax }
 
   TScriptSyntax = class(TObject)
   public
-    function IsComment(const s: string): boolean; virtual;
-    function MultiLineChar: char; virtual;
-    function ParseTemplateLine(const ln: string; var err: TSyntaxError): TTemplateLine; virtual;
-    function IsCaseSensitive: Boolean; virtual;
+    constructor Create; virtual;
 
-    function ParseComamnd(const ln: string; dst : TPlainCommand; var idx: integer; var err: TSyntaxError): Boolean; virtual;
+    function FeedLine(const s: string; var err: TSyntaxError): TScriptSyntaxResult; virtual;
+    procedure FeedEndOfFile(var err: TSyntaxError); virtual;
+    function GetNextTemplate(var err: TSyntaxError; out tmp: TTemplateLine): Boolean; virtual;
+
+    class function IsCaseSensitive: Boolean; virtual;
+
+    class function ParseComamnd(const ln: string; dst : TPlainCommand; var err: TSyntaxError): Boolean; virtual;
 
     // breaks out the line into the list of arguments.
     // the input line doesn't contain any variables.
-    procedure LineToArgs(const ln: string; dst: TStrings; var idx: Integer; var err: TSyntaxError); virtual;
+    class procedure LineToArgs(const ln: string; dst: TStrings; var idx: Integer; var err: TSyntaxError); virtual;
 
-    function PathsToScriptNative(const pth: string): string; virtual;
+    class function PathsToScriptNative(const pth: string): string; virtual;
   end;
 
   { TPlainParser }
@@ -94,22 +102,21 @@ type
   TPlainParser = class(TObject)
   private
     lineCount: Integer;
+    ctx      : TScriptSyntax;
+    procedure GatherCommands;
   public
-    curcmd   : TPlainCommand;
     commands : TList;
-    syntax   : TScriptSyntax;
+    syntax   : TScriptSyntaxClass;
     constructor Create;
     destructor Destroy; override;
     procedure ParseLine(const ins: string);
+    procedure EndOfFile;
   end;
 
 function ReadPlainCommandFile(const fn: string): TList;
 
 // converting TStrings to a single string
 function ArgsToOneLine(s : TStrings): string;
-
-// replacing command aliases
-procedure UpdateCommandAlias(c: TPlainCommand);
 
 const
   CMD_CD   = 'cd';  // change directory
@@ -145,34 +152,48 @@ type
   { TBatSyntax }
 
   TBatSyntax = class(TScriptSyntax)
-    function IsComment(const s: string): boolean; override;
-    function MultiLineChar: char; override;
-    function ParseTemplateLine(const buf: string; var err: TSyntaxError): TTemplateLine; override;
-    function IsCaseSensitive: Boolean; override;
-    procedure LineToArgs(const buf: string; args: TStrings; var idx: integer; var err: TSyntaxError); override;
-    function PathsToScriptNative(const pth: string): string; override;
-    function ParseComamnd(const ln: string; dst : TPlainCommand; var idx: integer; var err: TSyntaxError): Boolean; override;
+  public
+    retain : Boolean;
+    intbuf : string;
+    constructor Create; override;
+
+    function FeedLine(const s: string; var err: TSyntaxError): TScriptSyntaxResult; override;
+    procedure FeedEndOfFile(var err: TSyntaxError); override;
+    function GetNextTemplate(var err: TSyntaxError; out tmp: TTemplateLine): Boolean; override;
+
+    function ParseTemplateLine(const buf: string; var err: TSyntaxError): TTemplateLine;
+
+    function IsComment(const s: string): boolean;
+    class function IsCaseSensitive: Boolean; override;
+    class procedure LineToArgs(const buf: string; args: TStrings; var idx: integer; var err: TSyntaxError); override;
+    class function PathsToScriptNative(const pth: string): string; override;
+    class function ParseComamnd(const ln: string; dst : TPlainCommand; var err: TSyntaxError): Boolean; override;
   end;
 
   { TShSyntax }
 
   TShSyntax = class(TScriptSyntax)
-    function IsComment(const s: string): boolean; override;
-    function MultiLineChar: char; override;
-    function ParseTemplateLine(const buf: string; var err: TSyntaxError): TTemplateLine; override;
-    function IsCaseSensitive: Boolean; override;
-    procedure LineToArgs(const buf: string; args: TStrings; var idx: Integer; var err: TSyntaxError); override;
-    function PathsToScriptNative(const pth: string): string; override;
-    function ParseComamnd(const ln: string; dst : TPlainCommand; var idx: integer; var err: TSyntaxError): Boolean; override;
+  protected
+    b         : string;
+    retain    : Boolean;
+    waitQuote : char;
+  public
+    constructor Create; override;
+
+    function ParseTemplateLine(const buf: string; var idx: Integer;var err: TSyntaxError): TTemplateLine;
+
+    function FeedLine(const s: string; var err: TSyntaxError): TScriptSyntaxResult; override;
+    procedure FeedEndOfFile(var err: TSyntaxError); override;
+    function GetNextTemplate(var err: TSyntaxError; out tmp: TTemplateLine): Boolean; override;
+
+    class function IsCaseSensitive: Boolean; override;
+    class procedure LineToArgs(const buf: string; args: TStrings; var idx: Integer; var err: TSyntaxError); override;
+    class function PathsToScriptNative(const pth: string): string; override;
+    class function ParseComamnd(const ln: string; dst : TPlainCommand; var err: TSyntaxError): Boolean; override;
   end;
 
-var
-  batSyntax : TBatSyntax = nil;
-  shSyntax  : TShSyntax = nil;
-
-function GetNextWord(const s: string; var i : integer): string;
-
 procedure FreeTemplateLine(var l : TTemplateLine);
+function CopyTemplateLine(l : TTemplateLine): TTemplateLine;
 
 // replaces l.text paramters with their actual values from vars
 procedure SubstitueValues(l : TTemplateLine; vars: TStrings; caseSensitive: Boolean);
@@ -181,14 +202,10 @@ function TemplatesToStr(l: TTemplateLine): string;
 
 implementation
 
-function GetNextWord(const s: string; var i : integer): string;
-var
-  j : integer;
+procedure SyntaxErrorInit(out se: TSyntaxError);
 begin
-  while (i<=length(s)) and (s[i] in [#32,#9]) do inc(i);
-  j:=i;
-  while (i<=length(s)) and not (s[i] in [#32,#9]) do inc(i);
-  Result := Copy(s, j, i-j);
+  se.err := '';
+  se.pos := 0;
 end;
 
 { TTemplateLine }
@@ -225,19 +242,69 @@ end;
 
 { TShSyntax }
 
-function TShSyntax.IsComment(const s: string): boolean;
+function TShSyntax.FeedLine(const s: string; var err: TSyntaxError
+  ): TScriptSyntaxResult;
 var
   i : integer;
-  r : string;
 begin
+  if waitQuote = #0 then begin
+    if s = '' then begin
+      Result := srComment;
+      Exit;
+    end;
+    i := 1;
+    SkipWhile(s, i, WhiteSpaceChars);
+    if (i>length(s)) or (s[i]='#') then begin
+      Result := srComment;
+      // the commant after \ starts a new line
+      if b<>'' then Result := srTemplateAvail;
+      Exit;
+    end;
+  end;
+
+  if not retain then
+    // we don't care about the previous buffer
+    b := '';
+
   i := 1;
-  r := GetNextWord(s, i);
-  Result:=(r<>'') and (r[1] = '#');
+  while (i<=length(s)) do
+    ScanQuotes(s, i, waitQuote);
+
+  if (waitQuote <> #0) then begin
+    b := b + s + #10; // adding explicit line break
+    Result := srNeedMoreLines
+  end else if ((waitQuote = #0) and (s[length(s)] = '\')) then begin
+    b := b + Copy(s, 1, length(s)-1);
+    Result := srNeedMoreLines;
+  end else begin
+    b := b + s;
+    Result := srTemplateAvail;
+  end;
+  retain := Result = srNeedMoreLines;
 end;
 
-function TShSyntax.MultiLineChar: char;
+procedure TShSyntax.FeedEndOfFile(var err: TSyntaxError);
 begin
-  Result:='\';
+  if waitQuote <> #0 then begin
+    err.err :='unclosed quotation mark';
+  end;
+end;
+
+function TShSyntax.GetNextTemplate(var err: TSyntaxError; out tmp: TTemplateLine
+  ): Boolean;
+var
+  i : integer;
+begin
+  if b = '' then begin
+    tmp := nil;
+    Result := false;
+    Exit;
+  end;
+  i := 1;
+  tmp := ParseTemplateLine(b, i, err);
+  inc(i);
+  b := Copy(b, i, length(b));
+  Result := true;
 end;
 
 const
@@ -245,13 +312,20 @@ const
   FirstIdChars = ['a'..'z','A'..'Z','_'];
   IdChars = FirstIdChars+['0'..'9'];
 
-function TShSyntax.ParseTemplateLine(const buf: string; var err: TSyntaxError): TTemplateLine;
+constructor TShSyntax.Create;
+begin
+  inherited Create;
+end;
+
+function TShSyntax.ParseTemplateLine(const buf: string; var idx: Integer;
+  var err: TSyntaxError): TTemplateLine;
 var
   i : integer;
   j : integer;
   head : TTemplateLine;
   tail : TTemplateLine;
   nm : string;
+  q  : Boolean;
 
   procedure Push(cur: TTemplateLine);
   begin
@@ -275,12 +349,21 @@ begin
   try
     i := 1;
     j := 1;
+    q := false;
     while i<=length(buf) do begin
-      if (buf[i]= #39) then begin
+      if (buf[i] = ';') and not q then begin
+        // command separator
+        Break;
+      end else if (buf[i]= #39) then begin
         inc(i);
         // none of the variables is escaped
         while (i<=length(buf)) and (buf[i] <> #39) do
           inc(i);
+        inc(i);
+      end else if (buf[i] = '\') and q and (i < length(buf)) and (buf[i+1]='"') then begin
+        inc(i, 2);
+      end else if (buf[i]='"') then begin
+        q := not q;
         inc(i);
       end else if (buf[i]='$') then begin
         ConsumeText;
@@ -319,18 +402,19 @@ begin
       end else
         inc(i);
     end;
+    idx := i;
     ConsumeText;
   finally
     Result := head;
   end;
 end;
 
-function TShSyntax.IsCaseSensitive: Boolean;
+class function TShSyntax.IsCaseSensitive: Boolean;
 begin
   Result := true;
 end;
 
-procedure TShSyntax.LineToArgs(const buf: string; args: TStrings;
+class procedure TShSyntax.LineToArgs(const buf: string; args: TStrings;
   var idx: Integer;
   var err: TSyntaxError);
 var
@@ -362,13 +446,13 @@ begin
     args[i]:=UnixUnescape(args[i]);
 end;
 
-function TShSyntax.PathsToScriptNative(const pth: string): string;
+class function TShSyntax.PathsToScriptNative(const pth: string): string;
 begin
   Result:=SlashToUnix(pth);
 end;
 
-function TShSyntax.ParseComamnd(const ln: string; dst: TPlainCommand;
-  var idx: integer; var err: TSyntaxError): Boolean;
+class function TShSyntax.ParseComamnd(const ln: string; dst: TPlainCommand;
+  var err: TSyntaxError): Boolean;
 var
   f : string;
   i : integer;
@@ -399,13 +483,12 @@ begin
     inc(i);
     dst.varname := pr;
     dst.args.Add( ScanBashValue(ln, i));
-    idx := i;
   end else if (isExport) and (pr <> '') then begin
     dst.cmd := pcEnv;
     dst.varname := pr;
-    idx := i;
   end else begin
-    LineToArgs(ln, dst.args, idx, err);
+    i := 1;
+    LineToArgs(ln, dst.args, i, err);
     if (dst.Args.Count>0) then begin
       pr := dst.Args[0];
       if (pr = 'echo') then begin
@@ -429,17 +512,52 @@ var
   r : string;
 begin
   i := 1;
-  r := GetNextWord(s, i);
+  SkipWhile(s, i, WhiteSpaceChars);
+  r := StrTo(s, i, WhiteSpaceChars);
+
   Result :=
     (r = '::')
     or (AnsiLowerCase(r)='rem')
     // this is not Windows batch compatible:
-    or (r = '#');
+    or ((r<>'') and (r[1] = '#'));
 end;
 
-function TBatSyntax.MultiLineChar: char;
+constructor TBatSyntax.Create;
 begin
-  Result:='^';
+  inherited Create;
+end;
+
+function TBatSyntax.FeedLine(const s: string; var err: TSyntaxError
+  ): TScriptSyntaxResult;
+begin
+  if not retain then begin
+    intbuf := '';
+    if (IsComment(s)) or (s ='') then begin
+      Result := srComment;
+      Exit;
+    end;
+  end;
+
+  if (s<>'') and (s[length(s)]='^') then begin
+    intbuf := intbuf + Copy(s, 1, length(s)-1);
+    Result := srNeedMoreLines;
+  end else begin
+    intbuf := intbuf + s;
+    Result := srTemplateAvail;
+  end;
+end;
+
+procedure TBatSyntax.FeedEndOfFile(var err: TSyntaxError);
+begin
+
+end;
+
+function TBatSyntax.GetNextTemplate(var err: TSyntaxError; out
+  tmp: TTemplateLine): Boolean;
+begin
+  tmp := ParseTemplateLine(intbuf, err);
+  Result := Assigned(tmp);
+  intbuf := '';
 end;
 
 function TBatSyntax.ParseTemplateLine(const buf: string; var err: TSyntaxError): TTemplateLine;
@@ -514,12 +632,12 @@ begin
   Result := head;
 end;
 
-function TBatSyntax.IsCaseSensitive: Boolean;
+class function TBatSyntax.IsCaseSensitive: Boolean;
 begin
   Result := false;
 end;
 
-procedure TBatSyntax.LineToArgs(const buf: string; args: TStrings;
+class procedure TBatSyntax.LineToArgs(const buf: string; args: TStrings;
   var idx: integer; var err: TSyntaxError);
 var
   i : integer;
@@ -548,25 +666,27 @@ begin
   idx := i;
 end;
 
-function TBatSyntax.PathsToScriptNative(const pth: string): string;
+class function TBatSyntax.PathsToScriptNative(const pth: string): string;
 begin
   Result:=SlashToWindows(pth);
 end;
 
-function TBatSyntax.ParseComamnd(const ln: string; dst: TPlainCommand;
-  var idx: integer; var err: TSyntaxError): Boolean;
+class function TBatSyntax.ParseComamnd(const ln: string; dst: TPlainCommand;
+  var err: TSyntaxError): Boolean;
 var
   id: string;
   lw : string;
   t  : string;
   n,o,v : string;
   eq:Boolean;
+  idx : integer;
 begin
   if not Assigned(dst) then begin
     Result:=false;
     Exit;
   end;
 
+  idx := 1;
   SkipWhile(ln, idx, WhiteSpaceChars);
   if (idx>length(ln)) then begin
     Result := false;
@@ -614,39 +734,43 @@ end;
 
 { TScriptSyntax }
 
-function TScriptSyntax.IsComment(const s: string): boolean;
+constructor TScriptSyntax.Create;
+begin
+  inherited Create;
+end;
+
+function TScriptSyntax.FeedLine(const s: string; var err: TSyntaxError): TScriptSyntaxResult;
+begin
+  Result := srError
+end;
+
+function TScriptSyntax.GetNextTemplate(var err: TSyntaxError; out tmp: TTemplateLine): Boolean;
 begin
   Result := false;
 end;
 
-function TScriptSyntax.MultiLineChar: char;
+procedure TScriptSyntax.FeedEndOfFile(var err: TSyntaxError);
 begin
-  Result := #0;
 end;
 
-function TScriptSyntax.{%H-}ParseTemplateLine(const ln: string; var err: TSyntaxError): TTemplateLine;
-begin
-  Result := TTemplateLine.Create(ln);
-end;
-
-function TScriptSyntax.IsCaseSensitive: Boolean;
+class function TScriptSyntax.IsCaseSensitive: Boolean;
 begin
   Result := false;
 end;
 
-function TScriptSyntax.ParseComamnd(const ln: string; dst: TPlainCommand;
-  var idx: integer; var err: TSyntaxError): Boolean;
+class function TScriptSyntax.ParseComamnd(const ln: string; dst: TPlainCommand;
+  var err: TSyntaxError): Boolean;
 begin
   Result := false;
 end;
 
-procedure TScriptSyntax.LineToArgs(const ln: string; dst: TStrings;
+class procedure TScriptSyntax.LineToArgs(const ln: string; dst: TStrings;
   var idx: Integer; var err: TSyntaxError);
 begin
 
 end;
 
-function TScriptSyntax.PathsToScriptNative(const pth: string): string;
+class function TScriptSyntax.PathsToScriptNative(const pth: string): string;
 begin
   Result := pth;
 end;
@@ -656,105 +780,107 @@ end;
 constructor TPlainCommand.Create;
 begin
   inherited Create;
-  lines := TStringList.Create;
   args := TStringList.Create;
 end;
 
 destructor TPlainCommand.Destroy;
 begin
+  FreeTemplateLine(tmp);
   args.Free;
-  lines.Free;
   inherited Destroy;
 end;
 
 procedure TPlainCommand.ParseCommand(vars: TStrings);
 var
-  s : string;
-  i   : integer;
-  j   : integer;
   buf : string;
-  ln  : TTemplateLine;
   err : TSyntaxError;
 begin
   args.Clear;
-  cmd := pcExec;
-  if lines.Count=0 then Exit;
+  cmd := pcNone;
+  if tmp = nil then Exit;
 
-  buf := '';
-  for i:= 0 to lines.Count-2 do begin
-    s := lines[i];
-    buf := Copy(s, 1, length(s)-1);
-  end;
-  buf := buf + lines[lines.Count-1];
+  SubstitueValues(tmp, vars, syntax.IsCaseSensitive);
+  buf := TemplatesToStr(tmp);
 
-  err.err := '';
-  err.pos := 0;
-  ln := syntax.ParseTemplateLine(buf, err);
-  SubstitueValues(ln, vars, syntax.IsCaseSensitive);
-  buf := TemplatesToStr(ln);
-  FreeTemplateLine(ln);
-
-  err.err := '';
-  err.pos := 0;
-  i := 1;
-  syntax.ParseComamnd(buf, Self, i, err);
+  SyntaxErrorInit(err);
+  syntax.ParseComamnd(buf, Self, err);
 
   if (cmd = pcExec) and (args.Count > 0) then
     cmdlow := AnsiLowerCase(args[0]);
-  {while i<= length(buf) do begin
-    syntax.LineToArgs(buf, args, i, err);
-    if args.Count = 0 then
-      Break;
-  end;
-  }
 end;
 
 { TPlainParser }
+
+procedure TPlainParser.GatherCommands;
+var
+  err : TSyntaxError;
+  t   : TTemplateLine;
+  cmd : TPlainCommand;
+begin
+  SyntaxErrorInit(err);
+  while ctx.GetNextTemplate(err, t) do begin
+    if not Assigned(t) then Continue;
+
+    cmd := TPlainCommand.Create;
+    cmd.syntax := TScriptSyntaxClass(ctx.ClassType);
+    cmd.lineNum := lineCount;
+    cmd.tmp := t;
+    commands.Add(cmd);
+  end;
+end;
 
 constructor TPlainParser.Create;
 begin
   inherited Create;
   commands := TList.Create;
   lineCount := 0;
-  syntax := batSyntax;
+  syntax := TBatSyntax;
 end;
 
 destructor TPlainParser.Destroy;
 begin
   commands.Free;
+  ctx.Free;
   inherited Destroy;
 end;
 
 procedure TPlainParser.ParseLine(const ins: string);
 var
   s : string;
+  r : TScriptSyntaxResult;
+  err : TSyntaxError;
 begin
-  if (lineCount=0) then begin
+  if (ctx=nil) then begin
     if (ins = '#!/bin/bash') then
-      syntax := shSyntax
+      syntax := TShSyntax
     else if (ins = '#!/bin/bat') or (ins = '#!/bin/batch')
       or (ins = '#batch') or (ins = '#bat') then
-      syntax := batSyntax;
+      syntax := TBatSyntax;
+    ctx := syntax.Create;
   end;
 
   inc(lineCount);
   s := Trim(ins);
-  if (syntax.IsComment(s)) then Exit;
-  if s ='' then begin
-    curcmd := nil;
-    exit;
-  end;
-  if (curcmd = nil) then begin
-    curcmd := TPlainCommand.Create;
-    curcmd.syntax := syntax;
-    curcmd.lineNum := lineCount;
-    commands.Add(curcmd);
-  end;
-  curcmd.lines.Add(s);
-  if (s <> '') and (s[length(s)] = syntax.MultiLineChar) then
-    // multiline
-  else
-    curcmd := nil;
+
+  SyntaxErrorInit(err);
+  r := ctx.FeedLine(s, err);
+
+  if (r = srError) then Exit;
+  if (r = srComment) then Exit;
+
+  if r = srTemplateAvail then
+    GatherCommands;
+end;
+
+procedure TPlainParser.EndOfFile;
+var
+  err : TSyntaxError;
+begin
+  if (ctx=nil) then Exit;
+
+  SyntaxErrorInit(err);
+  ctx.FeedEndOfFile(err);
+  GatherCommands;
 end;
 
 function ReadPlainCommandFile(const fn: string): TList;
@@ -768,8 +894,10 @@ begin
   pp := TPlainParser.Create;
   try
     st.LoadFromFile(fn);
-    for i:=0 to st.Count-1 do
+    for i:=0 to st.Count-1 do begin
       pp.ParseLine(st[i]);
+    end;
+    pp.EndOfFile;
     res := TList.Create;
     for i:=0 to pp.commands.Count-1 do
       res.Add(pp.commands[i]);
@@ -806,18 +934,6 @@ begin
     Result[j]:=' ';
     inc(j);
   end;
-
-
-end;
-
-procedure UpdateCommandAlias(c: TPlainCommand);
-begin
-  {
-  if (c.cmd = CMD_EXPECT)
-    or (c.cmd = CMD_ASSES)
-    or (c.cmd = CMD_ASSERT) then
-    c.cmd := CMD_EXPECT;
-    }
 end;
 
 function GetTimeOutMs(const ts: string; out ms: Integer): Boolean;
@@ -862,6 +978,32 @@ begin
     t := l.next;
     FreeAndNil(l);
     l := t;
+  end;
+end;
+
+function CopyTemplateLine(l : TTemplateLine): TTemplateLine;
+var
+  n : TTemplateLine;
+begin
+  if l = nil then begin
+    Result := nil;
+    Exit;
+  end;
+  n := TTemplateLine.Create;
+  Result := n;
+  while Assigned(l) do begin
+    n.text := l.text;
+    n.isVar := l.isVar;
+    n.varName := l.varName;
+    n.func := l.func;
+    if Assigned(l.funcParams) then begin
+      n.funcParams := TSTringList.Create;
+      n.funcPArams.Assign(l.funcParams);
+    end;
+    if Assigned(l.next) then
+      n.next := TTemplateLine.Create;
+    l := l.next;
+    n := n.next;
   end;
 end;
 
@@ -911,15 +1053,6 @@ begin
   end;
 
 end;
-
-initialization
-  batSyntax := TBatSyntax.Create;
-  shSyntax  := TShSyntax.Create;
-
-finalization
-  batSyntax.Free;
-  shSyntax.Free;
-
 
 end.
 

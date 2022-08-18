@@ -16,6 +16,8 @@ function ScanDblQuoteStr(const s: string; var idx: integer): string;
 // SingleQuote doesn't allow \'
 function ScanSingleQuoteStr(const s: string; var idx: integer): string;
 
+procedure ScanQuotes(const s: string; var idx: integer; var waitQuote: char);
+
 implementation
 
 function ScanBashValue(const s: string; var idx: integer): string;
@@ -96,5 +98,30 @@ begin
     Result := Result + Copy(s, j, length(s)-j+1);
 end;
 
+
+procedure ScanQuotes(const s: string; var idx: integer; var waitQuote: char);
+begin
+  while (idx <= length(s)) do begin
+    case s[idx] of
+      #39: begin
+        if waitQuote = #0 then
+          waitQuote := #39
+        else if waitQuote = #39 then
+          waitQuote := #0;
+      end;
+      '"': begin
+        if waitQuote = '"' then
+          waitQuote := #0
+        else if waitQuote = #0 then
+          waitQuote := '"';
+      end;
+      '\': begin
+        if (waitQuote <> #39) and (idx < length(s)) and (s[idx+1]='"') then
+          inc(idx);
+      end;
+    end;
+    inc(idx);
+  end;
+end;
 
 end.

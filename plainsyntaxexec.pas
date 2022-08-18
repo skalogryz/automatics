@@ -191,7 +191,7 @@ begin
   for i:=0 to finalCmd.args.Count-1 do
     DoLog(' - '+ finalCmd.args[i]);
   if finalCmd.cmd <> rawcmd.cmd then begin
-    DoLog('Raw command: '+Trim(rawCmd.lines.Text));
+    DoLog('Raw command: '+TemplatesToStr(rawCmd.tmp));
   end;
 end;
 
@@ -492,7 +492,7 @@ begin
   c := TPlainCommand.Create;
   c.syntax := src.syntax;
   c.lineNum := src.lineNum;
-  c.lines.Assign(src.lines);
+  c.tmp := CopyTemplateLine(src.tmp);
   c.ParseCommand(Params);
   Result := c;
 end;
