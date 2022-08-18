@@ -142,6 +142,7 @@ type
     procedure EchoMsg(const msg: string; cmd: TPlainCommand); override;
     procedure ErrorMsg(const msg: string; cmd: TPlainCommand); override;
     procedure LogMsg(const msg: string; cmd: TPlainCommand); override;
+    function DisplayCommand(cmd: TPlainCommand): string;
   end;
 
 { TFileInfoDelegate }
@@ -154,13 +155,13 @@ end;
 
 procedure TFileInfoDelegate.StartCommand(const rawCmd, finalCmd: TPlainCommand);
 begin
-  Verbose('  run command: '+ finalCmd.cmd);
+  Verbose('  run command: '+ DisplayCommand(finalCmd));
 end;
 
 procedure TFileInfoDelegate.CommandFinished(rawCmd: TPlainCommand;
   res: TCommandExecResult);
 begin
-  Verbose('  end command: '+ res.cmd.cmd);
+  Verbose('  end command: '+ DisplayCommand(res.cmd));
 end;
 
 procedure TFileInfoDelegate.EchoMsg(const msg: string; cmd: TPlainCommand);
@@ -176,6 +177,13 @@ end;
 procedure TFileInfoDelegate.LogMsg(const msg: string; cmd: TPlainCommand);
 begin
   Verbose('  CMD LOG: '+msg);
+end;
+
+function TFileInfoDelegate.DisplayCommand(cmd: TPlainCommand): string;
+begin
+  if cmd = nil then Result := ''
+  else if cmd.cmdlow = '' then Result := PlainCmdStr[cmd.cmd]
+  else Result := cmd.cmdlow;
 end;
 
 { TFileRunInfo }
