@@ -125,10 +125,6 @@ const
 
   CMD_STORE   = 'store'; // probe,
 
-  CMD_SYNTAXSET  = '#SET';
-  CMD_SYNTAXEXPORT = '#EXPORT';
-  CMD_SYNTAXSETEXPORT = '#SETEXPORT';
-
   PlainCmdStr : array [TPlainCmd] of string = (
     'exec'       // execute anything
    ,'setVar'     // set variable
