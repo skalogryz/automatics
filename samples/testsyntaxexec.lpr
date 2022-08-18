@@ -14,7 +14,7 @@ var
   i    : integer;
   exec : TPlainSyntaxExec;
   cmds : TList;
-  stx  : TScriptSyntax;
+  stx  : TScriptSyntaxClass;
 begin
   cmds := ReadPlainCommandFile(fn);
   if not ASsigned(cmds) or (cmds.Count=0) then Exit;
