@@ -27,7 +27,10 @@ begin
   for i:=0 to l.Count-1 do begin
     cmd := TPlainCommand(l[i]);
     cmd.ParseCommand(nil);
-    writeln(cmd.cmd);
+    if cmd.cmd = pcExec then
+      writeln(cmd.cmdlow)
+    else
+      writeln(PlainCmdStr[cmd.cmd]);
   end;
 end;
 
