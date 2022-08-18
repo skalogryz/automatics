@@ -274,7 +274,7 @@ const
 begin
   res.hasTestResult := true;
   cond := Trim(ArgsToOneLine(c.args));
-
+  Log('condition: '+ cond);
   if cond ='' then begin
     res.testResult := trUnableToRun;
     ErrorMsg(InvalidParams);
@@ -405,6 +405,7 @@ end;
 function TPlainSyntaxExec.ExecCommand(c: TPlainCommand): TCommandExecResult;
 var
   ran : Boolean;
+  isRun: Boolean;
 begin
   if c = nil then begin
     Result := nil;
@@ -437,18 +438,24 @@ begin
         ToEnv.Add(c.varname);
       pcExec: begin
         if (c.cmdlow = CMD_FAILMSG) then begin
+          c.Args.Delete(0);
           failMessage := ArgsToOneLine(c.args);
         end else if (c.cmdlow = CMD_TIMEOUT) then begin
+          c.Args.Delete(0);
           if not GetTimeOutMs(ArgsToOneLine(c.args), CurTimeOut) then begin
             Log('Invalid time out line: ' + ArgsToOneLine(c.args)+', defaulting');
             CurTimeOut := DefTimeOut;
           end;
           Log('Time out is: '+IntToStr(CurTimeOut));
         end else if (c.cmdlow = CMD_EXPECT) then begin
+          c.Args.Delete(0);
           ExecExpect(c, result);
         end else begin
+          isRun := c.cmdLow = CMD_RUN;
+          if isRun then c.args.Delete(0);
+
           LastExitCode := 0;
-          if ExecProcess(c, result, true) then begin
+          if ExecProcess(c, result, isRun) then begin
             LastExitCode := result.procRes.exitCode;
             LastStdOutFn := result.procRes.stdOutFn;
             LastStdErrFn := result.procRes.stdErrFn;

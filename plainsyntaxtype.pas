@@ -87,13 +87,7 @@ type
     function GetNextTemplate(var err: TSyntaxError; out tmp: TTemplateLine): Boolean; virtual;
 
     class function IsCaseSensitive: Boolean; virtual;
-
     class function ParseComamnd(const ln: string; dst : TPlainCommand; var err: TSyntaxError): Boolean; virtual;
-
-    // breaks out the line into the list of arguments.
-    // the input line doesn't contain any variables.
-    class procedure LineToArgs(const ln: string; dst: TStrings; var idx: Integer; var err: TSyntaxError); virtual;
-
     class function PathsToScriptNative(const pth: string): string; virtual;
   end;
 
@@ -165,7 +159,7 @@ type
 
     function IsComment(const s: string): boolean;
     class function IsCaseSensitive: Boolean; override;
-    class procedure LineToArgs(const buf: string; args: TStrings; var idx: integer; var err: TSyntaxError); override;
+    class procedure LineToArgs(const buf: string; args: TStrings; var idx: integer; var err: TSyntaxError);
     class function PathsToScriptNative(const pth: string): string; override;
     class function ParseComamnd(const ln: string; dst : TPlainCommand; var err: TSyntaxError): Boolean; override;
   end;
@@ -187,7 +181,7 @@ type
     function GetNextTemplate(var err: TSyntaxError; out tmp: TTemplateLine): Boolean; override;
 
     class function IsCaseSensitive: Boolean; override;
-    class procedure LineToArgs(const buf: string; args: TStrings; var idx: Integer; var err: TSyntaxError); override;
+    class procedure LineToArgs(const buf: string; args: TStrings; var idx: Integer; var err: TSyntaxError);
     class function PathsToScriptNative(const pth: string): string; override;
     class function ParseComamnd(const ln: string; dst : TPlainCommand; var err: TSyntaxError): Boolean; override;
   end;
@@ -727,7 +721,7 @@ begin
     dst.args.Add(v);
   end else begin
     dst.cmd := pcExec;
-    dst.Args.Add(id);
+    idx := 1;
     LineToArgs(ln,dst.Args,idx,err);
   end;
 end;
@@ -762,12 +756,6 @@ class function TScriptSyntax.ParseComamnd(const ln: string; dst: TPlainCommand;
   var err: TSyntaxError): Boolean;
 begin
   Result := false;
-end;
-
-class procedure TScriptSyntax.LineToArgs(const ln: string; dst: TStrings;
-  var idx: Integer; var err: TSyntaxError);
-begin
-
 end;
 
 class function TScriptSyntax.PathsToScriptNative(const pth: string): string;
