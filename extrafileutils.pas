@@ -42,6 +42,8 @@ function SlashToNative(const s: string): string;
 function SlashToUnix(const s: string): string;
 function SlashToWindows(const s: string): string;
 
+function ExpandPathOnBase(const absbase, relPath: string): string;
+
 implementation
 
 type
@@ -241,6 +243,30 @@ end;
 function SlashToWindows(const s: string): string;
 begin
   Result := StringReplace(s, '/', '\', [rfReplaceAll]);
+end;
+
+function ExpandPathOnBase(const absbase, relPath: string): string;
+var
+  i : integer;
+  j : integer;
+  t : string;
+begin
+  Result := absbase;
+  j:=1;
+  i:=j;
+  while (i<=length(relPath)) do begin
+    if (relPath[i] in ['/','\']) then begin
+      t := Copy(relPath, j, i-j);
+      j := i+1;
+      if (t = '..') then Result := extractFileDir(Result)
+      else Result := IncludeTrailingPathDelimiter(Result)+t;
+    end;
+    inc(i);
+  end;
+  i := length(relPath)+1;
+  t := Copy(relPath, j, i-j);
+  if (t = '..') then Result := extractFileDir(Result)
+  else Result := IncludeTrailingPathDelimiter(Result)+t;
 end;
 
 end.
