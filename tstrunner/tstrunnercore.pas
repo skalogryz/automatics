@@ -171,11 +171,26 @@ type
     function DisplayCommand(cmd: TPlainCommand): string;
   end;
 
+procedure SW(const dst: TStream; const txt: string);
+begin
+  if Assigned(dst) and (length(txt)>0) then
+    dst.Write(txt[1], length(txt));
+end;
+
+procedure SWLn(const dst: TStream; const txt: string);
+begin
+  SW(dst, txt);
+  SW(dst, LineEnding);
+end;
+
 { TFileInfoDelegate }
 
 procedure TFileInfoDelegate.DoLog(const pfx, msg: string);
 var
   f : Text;
+  fn : string;
+  fs : TFileStream;
+  t  : string;
 begin
   try
     if (finfo.tempDir = '') then begin
@@ -189,16 +204,25 @@ begin
     if (logfn = '') then begin
       ForceDirectories(finfo.tempDir);
       logfn := IncludeTrailingPathDelimiter(finfo.tempDir)+DelegateLogFileName;
-      AssignFile(f, logfn); Rewrite(f);
-      CLoseFile(f);
+      fs := TFileStream.create(logfn, fmCreate);
+      try
+      finally
+        fs.Free;
+      end;
     end;
-    AssignFile(f, logfn); Append(f);
-    try
-      write(f, FormatDateTime('hh:nn:ss:zzz',now),' [',GetCurrentThreadId,']: ');
-      if pfx <> '' then write(f, pfx,': ');
-      writeln(f, msg);
-    finally
-      CloseFile(f);
+    if logfn <>'' then begin
+      fs := TFileStream.create(logfn, fmOpenReadWrite or fmShareDenyNone);
+      try
+        fs.Seek(0, soEnd);
+        SW(fs, FormatDateTime('hh:nn:ss:zzz',now)+' ['+INtToStr(GetCurrentThreadId)+']: ');
+        if pfx <> '' then begin
+          SW(fs, pfx);
+          SW(fs, ': ');
+        end;
+        SWLn(fs, msg);
+      finally
+        fs.Free;
+      end;
     end;
   except
   end;
@@ -254,6 +278,7 @@ begin
   try
     Log('executing: %s', [fn]);
     cmds := ReadPlainCommandFile(fn);
+    exec.RunTempDir := tempDir;
     exec.RunCommands(cmds);
     Log('finished: %s (%s)', [ExtractFileName(fn), TestResultNameStr[exec.FinalResult]]);
   finally
