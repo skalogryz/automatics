@@ -62,7 +62,6 @@ type
     function ExecCommand(c: TPlainCommand): TCommandExecResult;
     procedure ErrorMsg(const Msg: string);
     procedure EchoMsg(const Msg: string);
-    procedure Log(const msg: string);
 
     function CopyCmd(src: TPlainCommand): TPlainCommand;
   public
@@ -88,6 +87,8 @@ type
     destructor Destroy; override;
     procedure RunCommands(cmds: TList);
     procedure Clear;
+    // add log message to the output
+    procedure Log(const msg: string);
   end;
 
 function ReplaceParams(const cmd : string; params: TStrings): string;
@@ -125,9 +126,10 @@ type
   end;
 
   TFuncExecContext = record
-    fnname : string; // function name that's being called.
-                     // used for the cases when the same method is used to implement different functions
-    curdir : string; // current thread for the exec
+    fnname  : string; // function name that's being called.
+                      // used for the cases when the same method is used to implement different functions
+    curdir  : string; // current thread for the exec
+    execenv : TPlainSyntaxExec;
   end;
 
   TCustomCondFunc = procedure(
@@ -672,6 +674,7 @@ begin
   ctx.fnname := name;
 
   if Assigned(context) then begin
+    ctx.execenv := context;
     ctx.curdir := context.curdir;
   end;
 
