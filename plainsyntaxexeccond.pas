@@ -5,7 +5,7 @@ interface
 {$mode delphi}{$H+}
 
 uses
-  Classes, SysUtils,
+  Classes, SysUtils, ExtraFileUtils,
   fpexprpars, plainsyntaxexec;
 
 
@@ -19,7 +19,8 @@ type
   TExtraFunc = class(TObject)
     // FileExists
     // 0 - filename  of the file to exist
-    class procedure FileExists(const fnname: string;
+    class procedure FileExists(
+      const fc: TFuncExecContext;
       const args: array of string;
       var res: TCustomFuncResult);
     // TextMatch
@@ -29,14 +30,16 @@ type
     // text comparison is case-sensitive!
     class function TextMatch(const fn1, fn2: string; style: TTextCompareStyle): Boolean;  overload;
 
-    class procedure TextMatch(const fnname: string;
+    class procedure TextMatch(
+      const fc: TFuncExecContext;
       const args: array of string;
       var res: TCustomFuncResult); overload;
     // BinMatch
     // 0 - file 1 name
     // 1 - file 2 name
     // returns true if binary identical.
-    class procedure BinMatch(const fnname: string;
+    class procedure BinMatch(
+      const fc: TFuncExecContext;
       const args: array of string;
       var res: TCustomFuncResult);
     // PosInFile
@@ -44,7 +47,8 @@ type
     // 1 - file name
     // returns the offset (0 based) of the substring in the specified file
     // if not found returns -1
-    class procedure PosInFile(const fnname: string;
+    class procedure PosInFile(
+      const fc: TFuncExecContext;
       const args: array of string;
       var res: TCustomFuncResult);
   end;
@@ -52,10 +56,11 @@ type
 
 { TExtraFunc }
 
-class procedure TExtraFunc.FileExists(const fnname: string;
+class procedure TExtraFunc.FileExists(
+  const fc: TFuncExecContext;
   const args: array of string; var res: TCustomFuncResult);
 begin
-  res.bool:=SysUtils.FileExists(args[0]);
+  res.bool:=SysUtils.FileExists(ExpandPathOnBase(fc.curdir,args[0]));
 end;
 
 procedure DeleteBlankLines(s : TStrings);
@@ -135,7 +140,7 @@ begin
   end;
 end;
 
-class procedure TExtraFunc.TextMatch(const fnname: string;
+class procedure TExtraFunc.TextMatch(const fc: TFuncExecContext;
   const args: array of string; var res: TCustomFuncResult);
 var
   i   : integer;
@@ -154,18 +159,18 @@ begin
       'r','R': Include(st, tcTrimRight);
       'b','B': Include(st, tcIgnoreBlankLines);
     end;
-  res.bool := TextMatch(args[0], args[1], st);
+  res.bool := TextMatch(ExpandPathOnBase(fc.curdir, args[0]), ExpandPathOnBase(fc.curdir,args[1]), st);
 end;
 
-class procedure TExtraFunc.BinMatch(const fnname: string;
+class procedure TExtraFunc.BinMatch(const fc: TFuncExecContext;
   const args: array of string; var res: TCustomFuncResult);
 var
   fs1, fs2 : TFileStream;
   buf1, buf2 : array of byte;
   c1, c2 : integer;
 begin
-  fs1:=TfileStream.Create(args[0], fmOpenRead or fmShareDenyNone);
-  fs2:=TfileStream.Create(args[1], fmOpenRead or fmShareDenyNone);
+  fs1:=TfileStream.Create(ExpandPathOnBase(fc.curdir, args[0]), fmOpenRead or fmShareDenyNone);
+  fs2:=TfileStream.Create(ExpandPathOnBase(fc.curdir, args[1]), fmOpenRead or fmShareDenyNone);
   try
     res.bool := fs1.Size = fs2.Size;
     if not res.bool then Exit;
@@ -184,14 +189,14 @@ begin
   end;
 end;
 
-class procedure TExtraFunc.PosInFile(const fnname: string;
+class procedure TExtraFunc.PosInFile(const fc: TFuncExecContext;
   const args: array of string; var res: TCustomFuncResult);
 var
   fs1 : TFileStream;
   st  : string;
   sub : string;
 begin
-  fs1:=TfileStream.Create(args[1], fmOpenRead or fmShareDenyNone);
+  fs1:=TfileStream.Create(ExpandPathOnBase(fc.curdir, args[1]), fmOpenRead or fmShareDenyNone);
   try
     sub := args[0];
     if (fs1.Size = 0) then begin

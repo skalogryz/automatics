@@ -124,8 +124,14 @@ type
     bool : Boolean;
   end;
 
+  TFuncExecContext = record
+    fnname : string; // function name that's being called.
+                     // used for the cases when the same method is used to implement different functions
+    curdir : string; // current thread for the exec
+  end;
+
   TCustomCondFunc = procedure(
-    const fnname: string;
+    const execContext: TFuncExecContext;
     const args: array of string;
     var res: TCustomFuncResult) of object;
 
@@ -133,6 +139,8 @@ function RegisterCondFunc(const nm: string; fn: TCustomCondFunc;
   res: TCustomFuncResultType;
   const params: array of TCustomFuncResultType): Boolean;
 procedure RegisterFuncInExprParser(x: TFPExpressionParser);
+
+procedure RegisterFuncInExprParserForContext(x: TFPExpressionParser; context: TPlainSyntaxExec; tags: TList {of object, that to be freed});
 
 implementation
 
@@ -270,6 +278,8 @@ var
   x    : TFPExpressionParser;
   xr   : TFPExpressionResult;
   rb   : boolean;
+  tags : TList;
+  i    : integer;
 const
   BoolRes : array [boolean] of TTestResult = (trFail, trSuccess);
 begin
@@ -283,13 +293,14 @@ begin
   end;
 
   x := TFPExpressionParser.Create(nil);
+  tags := TList.Create;
   try
     try
       x.Identifiers.AddIntegerVariable('exitcode', LastExitCode);
       x.Identifiers.AddIntegerVariable('errorlevel', LastExitCode);
       x.Identifiers.AddStringVariable('stdoutfn', LastStdOutFn);
       x.Identifiers.AddStringVariable('stderrfn', LastStdErrFn);
-      RegisterFuncInExprParser(x);
+      RegisterFuncInExprParserForContext(x, Self, tags);
 
       x.Expression := cond;
       xr := x.Evaluate;
@@ -309,6 +320,8 @@ begin
       res.testResult := BoolRes[rb];
     finally
       x.Free;
+      for i:=0 to Tags.Count-1 do TObject(tags[i]).Free;
+      tags.Free;
     end;
   except
     on e: exception do begin
@@ -614,11 +627,14 @@ type
 
   TCustomFuncRecord = class(TObject)
   public
-    name    : string;
-    customFn: TCustomCondFunc;
+    name     : string;
+    customFn : TCustomCondFunc;
     paramStr : string;
     resType  : TCustomFuncResultType;
+
+    context  : TPlainSyntaxExec;
     procedure ExprParsFunc(Var Result : TFPExpressionResult; Const Args : TExprParameterArray);
+    procedure CopyFrom(ASrc: TCustomFuncRecord);
   end;
 
 { TCustomFuncRecord }
@@ -629,6 +645,7 @@ var
   astr : array of string;
   i    : integer;
   res  : TCustomFuncResult;
+  ctx  : TFuncExecContext;
 const
   BoolToStr : array [boolean] of string = ('0','1');
 begin
@@ -651,8 +668,15 @@ begin
   res.int := 0;
   res.bool := false;
   res.str := '';
+
+  ctx.fnname := name;
+
+  if Assigned(context) then begin
+    ctx.curdir := context.curdir;
+  end;
+
   try
-    customFn(name, astr, res);
+    customFn(ctx, astr, res);
   except
   end;
   if resType = tpInt then begin
@@ -665,6 +689,16 @@ begin
     Result.ResultType := rtBoolean;
     Result.ResBoolean := res.bool;
   end;
+end;
+
+procedure TCustomFuncRecord.CopyFrom(ASrc: TCustomFuncRecord);
+begin
+  if not Assigned(Asrc) then Exit;
+  name     := ASrc.name;
+  customFn := ASrc.customFn;
+  paramStr := ASrc.paramStr;
+  resType  := ASrc.resType;
+  context  := ASrc.context;
 end;
 
 var
@@ -720,11 +754,33 @@ var
   i  : integer;
   r  : TCustomFuncRecord;
 begin
+  if not Assigned(x) then Exit;
   for i:=0 to CustomFuncReg.Count-1 do
   begin
     r := TCustomFuncRecord(CustomFuncReg.Objects[i]);
     if r = nil then Continue;
     x.Identifiers.AddFunction(r.name, ResTypeToChar[r.ResType], r.paramStr, r.ExprParsFunc);
+  end;
+end;
+
+procedure RegisterFuncInExprParserForContext(x: TFPExpressionParser; context: TPlainSyntaxExec; tags: TList {of object, that to be freed});
+var
+  i   : integer;
+  src : TCustomFuncRecord;
+  r   : TCustomFuncRecord;
+begin
+  if not Assigned(x) or not Assigned(tags) then Exit;
+
+  for i:=0 to CustomFuncReg.Count-1 do
+  begin
+    src := TCustomFuncRecord(CustomFuncReg.Objects[i]);
+    if src = nil then Continue;
+
+    r := TCustomFuncRecord.Create;
+    r.CopyFrom(src);
+    r.context := context;
+    x.Identifiers.AddFunction(r.name, ResTypeToChar[r.ResType], r.paramStr, r.ExprParsFunc);
+    tags.Add(r);
   end;
 end;
 
