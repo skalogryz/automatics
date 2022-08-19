@@ -83,6 +83,7 @@ type
     FailMessage   : string;
     UnrunReason   : string;
     isTimeout     : Boolean;
+    RunTempDir    : string;  // target temp dir
     constructor Create;
     destructor Destroy; override;
     procedure RunCommands(cmds: TList);
@@ -355,9 +356,29 @@ begin
   for i:=1 to c.args.Count-1 do
     res.procInp.args[i-1]:=c.args[i];
 
-  ProcPrepareTempDir(res.procInp);
+  SetLength(res.procInp.env, ToEnv.Count);
+  for i:= 0 to ToEnv.Count-1 do
+    res.procInp.env[i] := Format('%s=%s', [ToEnv[i], Params.Values[ToEnv[i]] ]);
+
+  if RunTempDir = '' then begin
+    ProcPrepareTempDir(res.procInp);
+  end else begin
+    res.procInp.tempDir := IncludeTrailingPathDelimiter(RunTempDir)+'procLn_'+IntToStr(c.lineNum)+'_'+c.cmdlow;
+  end;
 
   Log('running process: "'+ res.procInp.exec+'"');
+  if length(res.procInp.args) > 0 then begin
+    Log('arguments: ' );
+    for i := 0 to length(res.procInp.args)-1 do begin
+      Log('  '+res.procInp.args[i]);
+    end;
+  end;
+  if length(res.procInp.env) > 0 then begin
+    Log('env vars: ' );
+    for i := 0 to length(res.procInp.env)-1 do begin
+      Log('  '+res.procInp.env[i]);
+    end;
+  end;
   Log('using timeout: ' + intToStr(CurTimeOut));
   if (res.procInp.timeOutMs>0) then
     Log('process timeout: '+IntToStr(res.procInp.timeOutMs));
