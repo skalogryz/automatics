@@ -25,7 +25,7 @@ begin
   writeln('tstrunner [%options%] [%dir or file%]');
   writeln;
   writeln(' -s %filename% - the test subject application');
-  writeln(' -s- - no sujbect application to be used');
+  writeln(' -s- - no subject application to be used');
   writeln(' -o %filename% - result name');
   writeln(' -l %filename% - log file name');
   writeln(' -l- - disable logging');
