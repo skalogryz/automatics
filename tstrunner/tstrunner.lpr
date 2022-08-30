@@ -7,7 +7,7 @@ uses
   cthreads,
   {$ENDIF}
   Classes, SysUtils, tstrunnercore, tstrunnerlog, runtesttypes
-  ,ExtraFileUtils, tstrunnerbi;
+  ,ExtraFileUtils, tstrunnerbi, tstrunnerzip;
 
 var
   ShowHelp : Boolean = false;
@@ -33,7 +33,7 @@ begin
   writeln(' -h - show help');
 end;
 
-procedure ResultsToCSV(res: TStringList);
+procedure ResultsToCSV(const dstFile: string; res: TStringList);
 var
   f : Text;
   reps  :TList;
@@ -41,10 +41,10 @@ begin
   reps := TList.Create;
   try
     ResultsToRepEntries(res, inp.Subject, FormatDateTime('yyyy-mm-dd hh:nn:ss:zzz', startTime), reps);
-    if outFn = ''
+    if dstFile = ''
       then ReportCSV(defaultColumns, reps, StdOut)
     else begin
-      AssignFile(f, outFn); Rewrite(f);
+      AssignFile(f, dstFile); Rewrite(f);
       try
         ReportCSV(defaultColumns, reps, f);
       finally
@@ -123,13 +123,19 @@ begin
 
       Log('starting. Subject: "%s"', [inp.subject]);
       startTime := Now;
+      inp.tempDir := IncludeTrailingPathDelimiter(GetTempDir(false))+NewGuidStr;
+      if (inp.tempDir<>'') and (outFn = '') then
+        outFn := IncludeTrailingPathDelimiter(inp.tempDir)+'results.txt';
+      Log('output dir: %s', [inp.tempDir]);
+
       PerformTests(Target, inp, res);
       if (res.Count>0) then begin
         Log('producing results');
-        ResultsToCSV(res);
+        ResultsToCSV(outFn, res);
       end else
         Log('no tests found');
       Log('done');
+      ZipDirToFile(inp.tempDir,'result.zip');
 
     finally
       Target.Free;

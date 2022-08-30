@@ -503,8 +503,6 @@ begin
   maxPara := inp.maxPara;
   subject := inp.subject;
   ftempDir := inp.tempDir;
-  if (ftempDir = '') then
-    ftempDir := IncludeTrailingPathDelimiter(GetTempDir(false))+NewGuidStr;
 
   if (maxPara <= 0) then maxPara := DEFAULT_PARALLEL;
 
