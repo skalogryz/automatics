@@ -44,6 +44,14 @@ function SlashToWindows(const s: string): string;
 
 function ExpandPathOnBase(const absbase, relPath: string): string;
 
+type
+  TFindAllFilesOpt =  set of (
+    faNeedDirs // return directories amongh the files
+  );
+
+procedure FindAllFiles(const rootdir: string; dst: TStrings; const options: TFindAllFilesOpt = []); overload;
+function FindAllFiles(const rootdir: string; const options: TFindAllFilesOpt = []): TStrings; overload;
+
 implementation
 
 type
@@ -267,6 +275,39 @@ begin
   t := Copy(relPath, j, i-j);
   if (t = '..') then Result := extractFileDir(Result)
   else Result := IncludeTrailingPathDelimiter(Result)+t;
+end;
+
+procedure FindAllFiles(const rootdir: string; dst: TStrings; const options: TFindAllFilesOpt);
+var
+  sr : TSearchRec;
+  d  : string;
+  fn : string;
+begin
+  d := IncludeTrailingPathDelimiter(rootdir);
+  if FindFirst(d+AllFilesMask,faAnyFile, sr)<> 0 then Exit;
+
+  try
+    repeat
+      // check if special file
+      if (sr.Name='.') or (sr.Name='..') or (sr.Name='') then
+        continue;
+      fn:=d+sr.Name;
+      if ((sr.Attr and faDirectory)>0) then begin
+        if faNeedDirs in options then dst.Add(fn);
+        FindAllFiles(fn, dst);
+      end else
+        dst.Add(fn);
+    until FindNext(sr)<>0;
+  finally
+    FindClose(sr);
+  end;
+
+end;
+
+function FindAllFiles(const rootdir: string; const options: TFindAllFilesOpt): TStrings;
+begin
+  Result := TStringList.Create();
+  FindAllFiles(rootdir, result, options);
 end;
 
 end.
